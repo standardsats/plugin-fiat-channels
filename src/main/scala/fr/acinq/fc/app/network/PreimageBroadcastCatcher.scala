@@ -68,9 +68,9 @@ class PreimageBroadcastCatcher(preimagesDb: PreimagesDb, kit: Kit, vals: Vals) e
       wallet.rpcClient.invoke("getblock", blockHash, 0).foreach {
         case JString(rawBlock) =>
           Block.read(rawBlock).tx.par.flatMap(extractPreimages).foreach(dh.execute)
-          logger.info(s"PLGN PHC, PreimageBroadcastCatcher 'getblock' has been processed")
+          logger.info(s"PLGN FC, PreimageBroadcastCatcher 'getblock' has been processed")
         case otherwise =>
-          logger.error(s"PLGN PHC, PreimageBroadcastCatcher 'getblock' has returned $otherwise")
+          logger.error(s"PLGN FC, PreimageBroadcastCatcher 'getblock' has returned $otherwise")
       }
 
     case PreimageBroadcastCatcher.TickClearIpAntiSpam => ipAntiSpam.clear
@@ -101,14 +101,14 @@ class PreimageBroadcastCatcher(preimagesDb: PreimagesDb, kit: Kit, vals: Vals) e
           ipAntiSpam(wrap.remoteIp) += 1
 
         case (Attempt.Successful(_: QueryPreimages), Some(wrap), _) =>
-          logger.info(s"PLGN PHC, PreimageBroadcastCatcher, too many preimage requests, peer=${msg.nodeId}")
+          logger.info(s"PLGN FC, PreimageBroadcastCatcher, too many preimage requests, peer=${msg.nodeId}")
           wrap sendHostedChannelMsg ReplyPreimages(Nil)
 
         case (Attempt.Successful(some), _, _) =>
-          logger.info(s"PLGN PHC, PreimageBroadcastCatcher, got unrelated message=${some.getClass.getName}, peer=${msg.nodeId}")
+          logger.info(s"PLGN FC, PreimageBroadcastCatcher, got unrelated message=${some.getClass.getName}, peer=${msg.nodeId}")
 
         case _ =>
-          logger.info(s"PLGN PHC, PreimageBroadcastCatcher, could not parse a message with tag=${msg.message.tag}, peer=${msg.nodeId}")
+          logger.info(s"PLGN FC, PreimageBroadcastCatcher, could not parse a message with tag=${msg.message.tag}, peer=${msg.nodeId}")
       }
   }
 }

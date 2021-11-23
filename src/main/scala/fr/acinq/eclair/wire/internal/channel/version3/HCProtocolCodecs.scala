@@ -132,7 +132,7 @@ object HCProtocolCodecs {
       case HC_UPDATE_FAIL_HTLC_TAG => updateFailHtlcCodec.decode(bitVector)
       case HC_UPDATE_FULFILL_HTLC_TAG => updateFulfillHtlcCodec.decode(bitVector)
       case HC_UPDATE_FAIL_MALFORMED_HTLC_TAG => updateFailMalformedHtlcCodec.decode(bitVector)
-      case tag => Attempt failure Err(s"PLGN PHC, wrong tag=$tag")
+      case tag => Attempt failure Err(s"PLGN FC, wrong tag=$tag")
     }
 
     decodeAttempt.map(_.value)
@@ -144,7 +144,7 @@ object HCProtocolCodecs {
     case msg: UpdateFailHtlc => UnknownMessage(HC_UPDATE_FAIL_HTLC_TAG, updateFailHtlcCodec.encode(msg).require.toByteVector)
     case msg: UpdateFulfillHtlc => UnknownMessage(HC_UPDATE_FULFILL_HTLC_TAG, updateFulfillHtlcCodec.encode(msg).require.toByteVector)
     case msg: UpdateFailMalformedHtlc => UnknownMessage(HC_UPDATE_FAIL_MALFORMED_HTLC_TAG, updateFailMalformedHtlcCodec.encode(msg).require.toByteVector)
-    case msg => throw new RuntimeException(s"PLGN PHC, wrong message=${msg.getClass.getName}")
+    case msg => throw new RuntimeException(s"PLGN FC, wrong message=${msg.getClass.getName}")
   }
 
   // Normal gossip messages which are also used in PHC gossip
@@ -157,7 +157,7 @@ object HCProtocolCodecs {
       case PHC_ANNOUNCE_SYNC_TAG => channelAnnouncementCodec.decode(bitVector)
       case PHC_UPDATE_GOSSIP_TAG => channelUpdateCodec.decode(bitVector)
       case PHC_UPDATE_SYNC_TAG => channelUpdateCodec.decode(bitVector)
-      case tag => Attempt failure Err(s"PLGN PHC, wrong tag=$tag")
+      case tag => Attempt failure Err(s"PLGN FC, wrong tag=$tag")
     }
 
     decodeAttempt.map(_.value)
@@ -168,6 +168,6 @@ object HCProtocolCodecs {
     case msg: ChannelAnnouncement => UnknownMessage(PHC_ANNOUNCE_SYNC_TAG, channelAnnouncementCodec.encode(msg).require.toByteVector)
     case msg: ChannelUpdate if isGossip => UnknownMessage(PHC_UPDATE_GOSSIP_TAG, channelUpdateCodec.encode(msg).require.toByteVector)
     case msg: ChannelUpdate => UnknownMessage(PHC_UPDATE_SYNC_TAG, channelUpdateCodec.encode(msg).require.toByteVector)
-    case msg => throw new RuntimeException(s"PLGN PHC, wrong message=${msg.getClass.getName}")
+    case msg => throw new RuntimeException(s"PLGN FC, wrong message=${msg.getClass.getName}")
   }
 }

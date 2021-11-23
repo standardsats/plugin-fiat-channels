@@ -130,16 +130,16 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
       else {
         dh.execute(data1) match {
           case Failure(DuplicateShortId) =>
-            log.info(s"PLGN PHC, DuplicateShortId when storing new HC, peer=$remoteNodeId")
+            log.info(s"PLGN FC, DuplicateShortId when storing new HC, peer=$remoteNodeId")
             stop(FSM.Normal) SendingHasChannelId Error(channelId, ErrorCodes.ERR_HOSTED_CHANNEL_DENIED)
 
           case Success(true) =>
-            log.info(s"PLGN PHC, stored new HC with peer=$remoteNodeId")
+            log.info(s"PLGN FC, stored new HC with peer=$remoteNodeId")
             channelsDb.updateSecretById(remoteNodeId, data.invoke.finalSecret)
             goto(NORMAL) using data1 SendingHosted fullySignedLCSS.stateUpdate
 
           case _ =>
-            log.info(s"PLGN PHC, database error when trying to store new HC, peer=$remoteNodeId")
+            log.info(s"PLGN FC, database error when trying to store new HC, peer=$remoteNodeId")
             stop(FSM.Normal) SendingHasChannelId Error(channelId, ErrorCodes.ERR_HOSTED_CHANNEL_DENIED)
         }
       }
@@ -234,13 +234,13 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
       val isSigOK = Announcements.checkSigs(announce)
 
       if (isSigOK && remoteSig.wantsReply) {
-        log.info(s"PLGN PHC, announcing PHC and sending sig reply, peer=$remoteNodeId")
+        log.info(s"PLGN FC, announcing PHC and sending sig reply, peer=$remoteNodeId")
         stay StoringAndUsing data1 SendingHosted localSig Announcing announce Announcing data1.channelUpdate
       } else if (isSigOK) {
-        log.info(s"PLGN PHC, announcing PHC without sig reply, peer=$remoteNodeId")
+        log.info(s"PLGN FC, announcing PHC without sig reply, peer=$remoteNodeId")
         stay StoringAndUsing data1 Announcing announce Announcing data1.channelUpdate
       } else {
-        log.info(s"PLGN PHC, announce sig check failed, peer=$remoteNodeId")
+        log.info(s"PLGN FC, announce sig check failed, peer=$remoteNodeId")
         stay
       }
 
@@ -377,7 +377,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
 
     case Event(cmd: CMD_ADD_HTLC, data: HC_DATA_ESTABLISHED) =>
       ackAddFail(cmd, ChannelUnavailable(channelId), data.channelUpdate)
-      log.info(s"PLGN PHC, rejecting htlc in state=$stateName, peer=$remoteNodeId")
+      log.info(s"PLGN FC, rejecting htlc in state=$stateName, peer=$remoteNodeId")
       stay
 
     // Scheduling override
@@ -388,7 +388,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
       else if (cmd.newLocalBalance > data.commitments.capacity) stay replying CMDResFailure("Overriding declined: new local balance exceeds capacity")
       else if (cmd.newLocalBalance < 0L.msat) stay replying CMDResFailure("Overriding declined: new local balance is less than zero")
       else {
-        log.info(s"PLGN PHC, scheduling override proposal for peer=$remoteNodeId")
+        log.info(s"PLGN FC, scheduling override proposal for peer=$remoteNodeId")
         val newLocalUpdates = data.commitments.lastCrossSignedState.localUpdates + data.commitments.nextLocalUpdates.size + 1
         val newRemoteUpdates = data.commitments.lastCrossSignedState.remoteUpdates + data.commitments.nextRemoteUpdates.size + 1
         val overrideLCSS = makeOverridingLocallySignedLCSS(data.commitments, cmd.newLocalBalance, newLocalUpdates, newRemoteUpdates, currentBlockDay)
@@ -568,7 +568,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
   }
 
   def ackAddFail(cmd: CMD_ADD_HTLC, cause: ChannelException, channelUpdate: ChannelUpdate): HostedFsmState = {
-    log.warning(s"PLGN PHC, ${cause.getMessage} while processing cmd=${cmd.getClass.getSimpleName} in state=$stateName")
+    log.warning(s"PLGN FC, ${cause.getMessage} while processing cmd=${cmd.getClass.getSimpleName} in state=$stateName")
     replyToCommand(RES_ADD_FAILED(channelUpdate = Some(channelUpdate), t = cause, c = cmd), cmd)
     stay
   }
@@ -592,7 +592,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
     }
 
   def failTimedoutOutgoing(localAdds: Set[UpdateAddHtlc], data: HC_DATA_ESTABLISHED): Unit = localAdds foreach { add =>
-    log.info(s"PLGN PHC, failing timed out outgoing htlc, hash=${add.paymentHash}, peer=$remoteNodeId")
+    log.info(s"PLGN FC, failing timed out outgoing htlc, hash=${add.paymentHash}, peer=$remoteNodeId")
     val reasonChain = HtlcResult OnChainFail HtlcOverriddenByLocalCommit(channelId, htlc = add)
     kit.relayer ! RES_ADD_SETTLED(data.commitments.originChannels(add.id), add, reasonChain)
   }
@@ -655,23 +655,23 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
     val isSignatureFine = resize.verifyClientSig(remoteNodeId)
 
     if (!data.isResizeSupported) {
-      log.info(s"PLGN PHC, resize check fail, not supported, peer=$remoteNodeId")
+      log.info(s"PLGN FC, resize check fail, not supported, peer=$remoteNodeId")
       val (data1, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_INVALID_RESIZE)
       errorState StoringAndUsing data1 SendingHasChannelId error
     } else if (resize.newCapacity < data.commitments.capacity) {
-      log.info(s"PLGN PHC, resize check fail, new capacity is less than current one, peer=$remoteNodeId")
+      log.info(s"PLGN FC, resize check fail, new capacity is less than current one, peer=$remoteNodeId")
       val (data1, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_INVALID_RESIZE)
       errorState StoringAndUsing data1 SendingHasChannelId error
     } else if (cfg.vals.phcConfig.maxCapacity < resize.newCapacity) {
-      log.info(s"PLGN PHC, resize check fail, new capacity is more than max allowed one, peer=$remoteNodeId")
+      log.info(s"PLGN FC, resize check fail, new capacity is more than max allowed one, peer=$remoteNodeId")
       val (data1, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_INVALID_RESIZE)
       errorState StoringAndUsing data1 SendingHasChannelId error
     } else if (!isSignatureFine) {
-      log.info(s"PLGN PHC, resize signature check fail, peer=$remoteNodeId")
+      log.info(s"PLGN FC, resize signature check fail, peer=$remoteNodeId")
       val (data1, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_INVALID_RESIZE)
       errorState StoringAndUsing data1 SendingHasChannelId error
     } else {
-      log.info(s"PLGN PHC, channel resize successfully accepted, peer=$remoteNodeId")
+      log.info(s"PLGN FC, channel resize successfully accepted, peer=$remoteNodeId")
       stay StoringAndUsing data.copy(resizeProposal = Some(resize), overrideProposal = None)
     }
   }

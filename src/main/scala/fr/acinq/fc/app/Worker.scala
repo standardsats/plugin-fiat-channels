@@ -58,12 +58,12 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, c
       if systemMessage.connectionInfo.remoteInit.features.hasPluginFeature(FCFeature.plugin) =>
       FC.remoteNode2Connection += systemMessage.nodeId -> PeerConnectedWrapNormal(info = systemMessage)
       Option(inMemoryHostedChannels get systemMessage.nodeId).foreach(_ |> HCPeerDisconnected |> HCPeerConnected)
-      logger.info(s"PLGN PHC, supporting peer connected, peer=${systemMessage.nodeId}")
+      logger.info(s"PLGN FC, supporting peer connected, peer=${systemMessage.nodeId}")
 
     case systemMessage: PeerDisconnected =>
       FC.remoteNode2Connection -= systemMessage.nodeId
       Option(inMemoryHostedChannels get systemMessage.nodeId).foreach(_ ! HCPeerDisconnected)
-      logger.info(s"PLGN PHC, supporting peer disconnected, peer=${systemMessage.nodeId}")
+      logger.info(s"PLGN FC, supporting peer disconnected, peer=${systemMessage.nodeId}")
 
     case Worker.TickClearIpAntiSpam => ipAntiSpam.clear
 
@@ -72,22 +72,22 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, c
 
     case UnknownMessageReceived(_, nodeId, message, _) if FC.hostedMessageTags contains message.tag =>
       Tuple3(HCProtocolCodecs decodeHostedMessage message, FC.remoteNode2Connection get nodeId, inMemoryHostedChannels get nodeId) match {
-        case (_: Attempt.Failure, _, _) => logger.info(s"PLGN PHC, hosted message decoding failed, messageTag=${message.tag}, peer=$nodeId")
+        case (_: Attempt.Failure, _, _) => logger.info(s"PLGN FC, hosted message decoding failed, messageTag=${message.tag}, peer=$nodeId")
         case (Attempt.Successful(_: ReplyPublicHostedChannelsEnd), Some(wrap), _) => hostedSync ! HostedSync.GotAllSyncFrom(wrap)
         case (Attempt.Successful(_: QueryPublicHostedChannels), Some(wrap), _) => hostedSync ! HostedSync.SendSyncTo(wrap)
 
         case (Attempt.Successful(_: AskBrandingInfo), Some(wrap), _) => if (cfg.vals.branding.enabled) wrap sendHostedChannelMsg cfg.brandingMessage
         // Special handling for InvokeHostedChannel: if chan exists neither in memory nor in db, then this is a new chan request and anti-spam rules apply
         case (Attempt.Successful(invoke: InvokeHostedChannel), Some(wrap), null) => restore(guardSpawn(nodeId, wrap, invoke), _ |> HCPeerConnected |> invoke)(nodeId)
-        case (Attempt.Successful(_: HostedChannelMessage), _, null) => logger.info(s"PLGN PHC, no target for HostedMessage, messageTag=${message.tag}, peer=$nodeId")
+        case (Attempt.Successful(_: HostedChannelMessage), _, null) => logger.info(s"PLGN FC, no target for HostedMessage, messageTag=${message.tag}, peer=$nodeId")
         case (Attempt.Successful(hosted: HostedChannelMessage), _, channelRef) => channelRef ! hosted
       }
 
     case UnknownMessageReceived(_, nodeId, message, _) if FC.chanIdMessageTags contains message.tag =>
       Tuple2(HCProtocolCodecs decodeHasChanIdMessage message, inMemoryHostedChannels get nodeId) match {
-        case (_: Attempt.Failure, _) => logger.info(s"PLGN PHC, HasChannelId message decoding fail, messageTag=${message.tag}, peer=$nodeId")
+        case (_: Attempt.Failure, _) => logger.info(s"PLGN FC, HasChannelId message decoding fail, messageTag=${message.tag}, peer=$nodeId")
         case (Attempt.Successful(error: eclair.wire.protocol.Error), null) => restore(Tools.none, _ |> HCPeerConnected |> error)(nodeId)
-        case (_, null) => logger.info(s"PLGN PHC, no target for HasChannelIdMessage, messageTag=${message.tag}, peer=$nodeId")
+        case (_, null) => logger.info(s"PLGN FC, no target for HasChannelIdMessage, messageTag=${message.tag}, peer=$nodeId")
         case (Attempt.Successful(msg), channelRef) => channelRef ! msg
       }
 
@@ -114,10 +114,11 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, c
         case Some(channelRef) => channelRef forward cmd
       }
 
-    case Terminated(channelRef) => inMemoryHostedChannels.inverse.remove(channelRef)
+    case Terminated(channelRef) =>
+      inMemoryHostedChannels.inverse.remove(channelRef)
 
     case TickRemoveIdleChannels =>
-      logger.info(s"PLGN PHC, in-memory HC#=${inMemoryHostedChannels.size}")
+      logger.info(s"PLGN FC, in-memory HC#=${inMemoryHostedChannels.size}")
       inMemoryHostedChannels.values.forEach(_ ! TickRemoveIdleChannels)
 
     case SyncProgress(1D) if clientChannelRemoteNodeIds.isEmpty =>
@@ -128,7 +129,7 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, c
 
       if (!nodeIdCheck) {
         // Our nodeId has changed, this is very bad
-        logger.info("PLGN PHC, NODE ID CHECK FAILED")
+        logger.info("PLGN FC, NODE ID CHECK FAILED")
         System.exit(0)
       } else {
         clientChannelRemoteNodeIds ++= clientRemoteNodeIds
@@ -142,7 +143,7 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, c
 
       if (unconnectedHosts.nonEmpty) {
         val routerData = (kit.router ? Router.GetRouterData).mapTo[Router.Data]
-        logger.info(s"PLGN PHC, unconnected hosts=$unconnectedHosts")
+        logger.info(s"PLGN FC, unconnected hosts=$unconnectedHosts")
 
         for {
           data <- routerData
@@ -150,7 +151,7 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, c
           nodeAnnouncement <- data.nodes.get(nodeId)
           sockAddress <- nodeAnnouncement.addresses.headOption.map(_.socketAddress)
           hostAndPort = HostAndPort.fromParts(sockAddress.getHostString, sockAddress.getPort)
-          _ = logger.info(s"PLGN PHC, trying to reconnect to ${nodeAnnouncement.nodeId}/$hostAndPort")
+          _ = logger.info(s"PLGN FC, trying to reconnect to ${nodeAnnouncement.nodeId}/$hostAndPort")
         } kit.switchboard ! Peer.Connect(address_opt = Some(hostAndPort), nodeId = nodeId)
       }
   }

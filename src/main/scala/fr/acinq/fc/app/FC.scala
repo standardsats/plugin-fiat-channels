@@ -30,51 +30,51 @@ import scala.util.Try
 
 
 object FC {
-  final val HC_INVOKE_HOSTED_CHANNEL_TAG = 75535
+  final val HC_INVOKE_HOSTED_CHANNEL_TAG = 55535
 
-  final val HC_INIT_HOSTED_CHANNEL_TAG = 75533
+  final val HC_INIT_HOSTED_CHANNEL_TAG = 55533
 
-  final val HC_LAST_CROSS_SIGNED_STATE_TAG = 75531
+  final val HC_LAST_CROSS_SIGNED_STATE_TAG = 55531
 
-  final val HC_STATE_UPDATE_TAG = 75529
+  final val HC_STATE_UPDATE_TAG = 55529
 
-  final val HC_STATE_OVERRIDE_TAG = 75527
+  final val HC_STATE_OVERRIDE_TAG = 55527
 
-  final val HC_HOSTED_CHANNEL_BRANDING_TAG = 75525
+  final val HC_HOSTED_CHANNEL_BRANDING_TAG = 55525
 
-  final val HC_ANNOUNCEMENT_SIGNATURE_TAG = 75523
+  final val HC_ANNOUNCEMENT_SIGNATURE_TAG = 55523
 
-  final val HC_RESIZE_CHANNEL_TAG = 75521
+  final val HC_RESIZE_CHANNEL_TAG = 55521
 
-  final val HC_QUERY_PUBLIC_HOSTED_CHANNELS_TAG = 75519
+  final val HC_QUERY_PUBLIC_HOSTED_CHANNELS_TAG = 55519
 
-  final val HC_REPLY_PUBLIC_HOSTED_CHANNELS_END_TAG = 75517
+  final val HC_REPLY_PUBLIC_HOSTED_CHANNELS_END_TAG = 55517
 
-  final val HC_QUERY_PREIMAGES_TAG = 75515
+  final val HC_QUERY_PREIMAGES_TAG = 55515
 
-  final val HC_REPLY_PREIMAGES_TAG = 75513
+  final val HC_REPLY_PREIMAGES_TAG = 55513
 
-  final val HC_ASK_BRANDING_INFO = 75511
-
-
-  final val PHC_ANNOUNCE_GOSSIP_TAG = 74513
-
-  final val PHC_ANNOUNCE_SYNC_TAG = 74511
-
-  final val PHC_UPDATE_GOSSIP_TAG = 74509
-
-  final val PHC_UPDATE_SYNC_TAG = 74507
+  final val HC_ASK_BRANDING_INFO = 55511
 
 
-  final val HC_UPDATE_ADD_HTLC_TAG = 73505
+  final val PHC_ANNOUNCE_GOSSIP_TAG = 54513
 
-  final val HC_UPDATE_FULFILL_HTLC_TAG = 73503
+  final val PHC_ANNOUNCE_SYNC_TAG = 54511
 
-  final val HC_UPDATE_FAIL_HTLC_TAG = 73501
+  final val PHC_UPDATE_GOSSIP_TAG = 54509
 
-  final val HC_UPDATE_FAIL_MALFORMED_HTLC_TAG = 73499
+  final val PHC_UPDATE_SYNC_TAG = 54507
 
-  final val HC_ERROR_TAG = 73497
+
+  final val HC_UPDATE_ADD_HTLC_TAG = 53505
+
+  final val HC_UPDATE_FULFILL_HTLC_TAG = 53503
+
+  final val HC_UPDATE_FAIL_HTLC_TAG = 53501
+
+  final val HC_UPDATE_FAIL_MALFORMED_HTLC_TAG = 53499
+
+  final val HC_ERROR_TAG = 53497
 
   val hostedMessageTags: Set[Int] =
     Set(HC_INVOKE_HOSTED_CHANNEL_TAG, HC_INIT_HOSTED_CHANNEL_TAG, HC_LAST_CROSS_SIGNED_STATE_TAG, HC_STATE_UPDATE_TAG,
@@ -276,10 +276,10 @@ case object ResizeableFCFeature extends Feature {
 // Depends on https://github.com/engenegr/eclair-alarmbot-plugin
 case class AlmostTimedoutIncomingHtlc(add: wire.protocol.UpdateAddHtlc, fulfill: wire.protocol.UpdateFulfillHtlc, nodeId: PublicKey, blockCount: Long) extends fr.acinq.alarmbot.CustomAlarmBotMessage {
   override def message: String = s"AlmostTimedoutIncomingHtlc, id=${add.id}, amount=${add.amountMsat}, hash=${add.paymentHash}, expiry=${add.cltvExpiry.toLong}, tip=$blockCount, preimage=${fulfill.paymentPreimage}, peer=$nodeId"
-  override def senderEntity: String = "HC"
+  override def senderEntity: String = "FC"
 }
 
 case class FCSuspended(nodeId: PublicKey, isHost: Boolean, isLocal: Boolean, description: String) extends fr.acinq.alarmbot.CustomAlarmBotMessage {
   override def message: String = s"HCSuspended, isHost=$isHost, isLocal=$isLocal, peer=$nodeId, description=$description"
-  override def senderEntity: String = "HC"
+  override def senderEntity: String = "FC"
 }
