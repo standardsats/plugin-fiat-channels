@@ -10,11 +10,12 @@ import fr.acinq.eclair
 import fr.acinq.eclair.io._
 import fr.acinq.eclair.router.{Router, SyncProgress}
 import fr.acinq.eclair.wire.internal.channel.version3.HCProtocolCodecs
-import fr.acinq.fc.app.Worker._
 import fr.acinq.fc.app.channel._
 import fr.acinq.fc.app.db.Blocking.timeout
 import fr.acinq.fc.app.db.HostedChannelsDb
 import fr.acinq.fc.app.network.HostedSync
+import fr.acinq.fc.app.Worker._
+import fr.acinq.fc.app.rate.RateOracle
 import grizzled.slf4j.Logging
 import scodec.Attempt
 
@@ -37,6 +38,7 @@ object Worker {
   case object TickUpdateRate { val label = "TickUpdateRate" }
 
   val notFound: CMDResFailure = CMDResFailure("HC with remote node is not found")
+  val rateOracle: RateOracle = new RateOracle
 }
 
 class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, channelsDb: HostedChannelsDb, cfg: Config) extends Actor with Logging { me =>
@@ -126,6 +128,7 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, c
 
     case TickUpdateRate =>
       logger.info("Updating current fiat rate")
+      rateOracle.queryRate
 
     case SyncProgress(1D) if clientChannelRemoteNodeIds.isEmpty =>
       // We need a fully loaded graph to find Host IP addresses and ports
