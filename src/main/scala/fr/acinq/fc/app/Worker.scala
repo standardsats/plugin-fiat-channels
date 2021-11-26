@@ -34,6 +34,8 @@ object Worker {
 
   case object TickRemoveIdleChannels { val label = "TickRemoveIdleChannels" }
 
+  case object TickUpdateRate { val label = "TickUpdateRate" }
+
   val notFound: CMDResFailure = CMDResFailure("HC with remote node is not found")
 }
 
@@ -41,6 +43,7 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, c
   context.system.scheduler.scheduleWithFixedDelay(60.minutes, 60.minutes, self, Worker.TickClearIpAntiSpam)
   context.system.scheduler.scheduleWithFixedDelay(5.seconds, 5.seconds, self, Worker.TickReconnectHosts)
   context.system.scheduler.scheduleWithFixedDelay(12.hours, 12.hours, self, TickRemoveIdleChannels)
+  context.system.scheduler.scheduleWithFixedDelay(15.seconds, 15.seconds, self, TickUpdateRate)
 
   context.system.eventStream.subscribe(channel = classOf[UnknownMessageReceived], subscriber = self)
   context.system.eventStream.subscribe(channel = classOf[PeerDisconnected], subscriber = self)
@@ -120,6 +123,9 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, c
     case TickRemoveIdleChannels =>
       logger.info(s"PLGN FC, in-memory HC#=${inMemoryHostedChannels.size}")
       inMemoryHostedChannels.values.forEach(_ ! TickRemoveIdleChannels)
+
+    case TickUpdateRate =>
+      logger.info("Updating current fiat rate")
 
     case SyncProgress(1D) if clientChannelRemoteNodeIds.isEmpty =>
       // We need a fully loaded graph to find Host IP addresses and ports
