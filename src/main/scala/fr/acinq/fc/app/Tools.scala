@@ -104,7 +104,7 @@ class Config(datadir: File) {
 
 
 case class FCParams(feeBaseMsat: Long, feeProportionalMillionths: Long, cltvDeltaBlocks: Int, channelCapacityMsat: Long, htlcMinimumMsat: Long, maxAcceptedHtlcs: Int, isResizable: Boolean) {
-  val initMsg: InitHostedChannel = InitHostedChannel(UInt64(channelCapacityMsat), htlcMinimum, maxAcceptedHtlcs, channelCapacityMsat.msat, initialClientBalanceMsat = 0L.msat, channelFeatures)
+  val initMsg: InitHostedChannel = InitHostedChannel(UInt64(channelCapacityMsat), htlcMinimum, maxAcceptedHtlcs, channelCapacityMsat.msat, initialClientBalanceMsat = 0L.msat, initialRate = 0L.msat, channelFeatures)
 
   lazy val channelFeatures: List[Int] = if (isResizable) List(FCFeature.mandatory, ResizeableFCFeature.mandatory) else List(FCFeature.mandatory)
 

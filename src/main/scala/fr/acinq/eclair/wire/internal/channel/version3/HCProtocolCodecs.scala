@@ -22,6 +22,7 @@ object HCProtocolCodecs {
       (uint16 withContext "maxAcceptedHtlcs") ::
       (millisatoshi withContext "channelCapacityMsat") ::
       (millisatoshi withContext "initialClientBalanceMsat") ::
+      (millisatoshi withContext "initialRate") ::
       (listOfN(uint16, uint16) withContext "features")
   }.as[InitHostedChannel]
 
@@ -38,6 +39,7 @@ object HCProtocolCodecs {
       (uint32 withContext "blockDay") ::
       (millisatoshi withContext "localBalanceMsat") ::
       (millisatoshi withContext "remoteBalanceMsat") ::
+      (millisatoshi withContext "rate") ::
       (uint32 withContext "localUpdates") ::
       (uint32 withContext "remoteUpdates") ::
       (listOfN(uint16, lengthDelimited(updateAddHtlcCodec)) withContext "incomingHtlcs") ::

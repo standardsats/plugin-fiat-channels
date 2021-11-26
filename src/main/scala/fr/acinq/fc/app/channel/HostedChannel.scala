@@ -105,7 +105,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
 
     case Event(hostInit: InitHostedChannel, data: HC_DATA_CLIENT_WAIT_HOST_INIT) =>
       val fullySignedLCSS = LastCrossSignedState(isHost = false, data.refundScriptPubKey, initHostedChannel = hostInit, currentBlockDay,
-        localBalanceMsat = hostInit.initialClientBalanceMsat, remoteBalanceMsat = hostInit.channelCapacityMsat - hostInit.initialClientBalanceMsat, localUpdates = 0L, remoteUpdates = 0L,
+        localBalanceMsat = hostInit.initialClientBalanceMsat, remoteBalanceMsat = hostInit.channelCapacityMsat - hostInit.initialClientBalanceMsat, rate=0L.msat, localUpdates = 0L, remoteUpdates = 0L,
         incomingHtlcs = Nil, outgoingHtlcs = Nil, localSigOfRemote = ByteVector64.Zeroes, remoteSigOfLocal = ByteVector64.Zeroes).withLocalSigOfRemote(kit.nodeParams.privateKey)
 
       if (hostInit.initialClientBalanceMsat > hostInit.channelCapacityMsat) stop(FSM.Normal) SendingHasChannelId Error(channelId, "Proposed init balance for us is larger than capacity")
@@ -113,7 +113,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
 
     case Event(clientSU: StateUpdate, data: HC_DATA_HOST_WAIT_CLIENT_STATE_UPDATE) =>
       val fullySignedLCSS = LastCrossSignedState(isHost = true, data.invoke.refundScriptPubKey, initHostedChannel = cfg.vals.hcParams.initMsg, clientSU.blockDay,
-        localBalanceMsat = cfg.vals.hcParams.initMsg.channelCapacityMsat, remoteBalanceMsat = MilliSatoshi(0L), localUpdates = 0L, remoteUpdates = 0L, incomingHtlcs = Nil,
+        localBalanceMsat = cfg.vals.hcParams.initMsg.channelCapacityMsat, remoteBalanceMsat = MilliSatoshi(0L), rate=MilliSatoshi(0L), localUpdates = 0L, remoteUpdates = 0L, incomingHtlcs = Nil,
         outgoingHtlcs = Nil, remoteSigOfLocal = clientSU.localSigOfRemoteLCSS, localSigOfRemote = ByteVector64.Zeroes).withLocalSigOfRemote(kit.nodeParams.privateKey)
 
       val dh = new DuplicateHandler[HC_DATA_ESTABLISHED] {

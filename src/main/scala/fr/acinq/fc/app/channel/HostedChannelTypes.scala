@@ -12,6 +12,8 @@ import fr.acinq.eclair.wire.protocol._
 import fr.acinq.fc.app._
 import scodec.bits.ByteVector
 
+import scala.language.postfixOps
+
 
 case class HostedChannelRestored(channel: ActorRef, channelId: ByteVector32, peer: ActorRef, remoteNodeId: PublicKey) extends AbstractChannelRestored
 
@@ -140,7 +142,7 @@ case class HostedCommitments(localNodeId: PublicKey, remoteNodeId: PublicKey, ch
 
   def nextLocalUnsignedLCSS(blockDay: Long): LastCrossSignedState =
     LastCrossSignedState(lastCrossSignedState.isHost, lastCrossSignedState.refundScriptPubKey, lastCrossSignedState.initHostedChannel,
-      blockDay = blockDay, localBalanceMsat = nextLocalSpec.toLocal, remoteBalanceMsat = nextLocalSpec.toRemote, nextTotalLocal, nextTotalRemote,
+      blockDay = blockDay, localBalanceMsat = nextLocalSpec.toLocal, remoteBalanceMsat = nextLocalSpec.toRemote, rate=0L.msat, nextTotalLocal, nextTotalRemote,
       nextLocalSpec.htlcs.collect(DirectedHtlc.incoming).toList.sortBy(_.id), nextLocalSpec.htlcs.collect(DirectedHtlc.outgoing).toList.sortBy(_.id),
       localSigOfRemote = ByteVector64.Zeroes, remoteSigOfLocal = ByteVector64.Zeroes)
 
