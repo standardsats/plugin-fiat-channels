@@ -5,8 +5,8 @@ import akka.event.LoggingAdapter
 import akka.http.scaladsl.server.Route
 import akka.pattern.ask
 import akka.util.Timeout
-import fr.acinq.bitcoin.Crypto.PublicKey
 import fr.acinq.bitcoin.{ByteVector32, Satoshi, Script}
+import fr.acinq.bitcoin.Crypto.PublicKey
 import fr.acinq.eclair._
 import fr.acinq.eclair.api.directives.EclairDirectives
 import fr.acinq.eclair.blockchain.fee.{FeeratePerByte, FeeratePerKw}
@@ -18,10 +18,11 @@ import fr.acinq.eclair.router.Router
 import fr.acinq.eclair.transactions.DirectedHtlc
 import fr.acinq.eclair.wire.internal.channel.version3.HostedChannelCodecs
 import fr.acinq.eclair.wire.protocol.{FailureMessage, UpdateAddHtlc}
-import fr.acinq.fc.app.FC._
 import fr.acinq.fc.app.channel._
 import fr.acinq.fc.app.db.{Blocking, HostedChannelsDb, HostedUpdatesDb, PreimagesDb}
+import fr.acinq.fc.app.FC._
 import fr.acinq.fc.app.network.{HostedSync, OperationalData, PHC, PreimageBroadcastCatcher}
+import fr.acinq.fc.app.rate.RateOracle
 import scodec.bits.ByteVector
 
 import scala.collection.mutable
@@ -95,6 +96,7 @@ class FC extends Plugin with RouteProvider {
   var preimageRef: ActorRef = _
   var workerRef: ActorRef = _
   var syncRef: ActorRef = _
+  var rateOracleRef: ActorRef = _
   var config: Config = _
   var kit: Kit = _
 
@@ -108,7 +110,8 @@ class FC extends Plugin with RouteProvider {
     implicit val coreActorSystem: ActorSystem = eclairKit.system
     preimageRef = eclairKit.system actorOf Props(classOf[PreimageBroadcastCatcher], new PreimagesDb(config.db), eclairKit, config.vals)
     syncRef = eclairKit.system actorOf Props(classOf[HostedSync], eclairKit, new HostedUpdatesDb(config.db), config.vals.phcConfig)
-    workerRef = eclairKit.system actorOf Props(classOf[Worker], eclairKit, syncRef, preimageRef, channelsDb, config)
+    rateOracleRef = eclairKit.system actorOf Props(classOf[RateOracle], eclairKit)
+    workerRef = eclairKit.system actorOf Props(classOf[Worker], eclairKit, syncRef, rateOracleRef, preimageRef, channelsDb, config)
     kit = eclairKit
   }
 
