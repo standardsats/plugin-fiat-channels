@@ -23,6 +23,7 @@ import fr.acinq.fc.app.db.{Blocking, HostedChannelsDb, HostedUpdatesDb, Preimage
 import fr.acinq.fc.app.FC._
 import fr.acinq.fc.app.network.{HostedSync, OperationalData, PHC, PreimageBroadcastCatcher}
 import fr.acinq.fc.app.rate.RateOracle
+import fr.acinq.fc.app.rate.BitfinexSource
 import scodec.bits.ByteVector
 
 import scala.collection.mutable
@@ -110,7 +111,7 @@ class FC extends Plugin with RouteProvider {
     implicit val coreActorSystem: ActorSystem = eclairKit.system
     preimageRef = eclairKit.system actorOf Props(classOf[PreimageBroadcastCatcher], new PreimagesDb(config.db), eclairKit, config.vals)
     syncRef = eclairKit.system actorOf Props(classOf[HostedSync], eclairKit, new HostedUpdatesDb(config.db), config.vals.phcConfig)
-    rateOracleRef = eclairKit.system actorOf Props(classOf[RateOracle], eclairKit)
+    rateOracleRef = eclairKit.system actorOf Props(classOf[RateOracle], eclairKit, new BitfinexSource())
     workerRef = eclairKit.system actorOf Props(classOf[Worker], eclairKit, syncRef, rateOracleRef, preimageRef, channelsDb, config)
     kit = eclairKit
   }
