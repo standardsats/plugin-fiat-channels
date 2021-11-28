@@ -40,3 +40,20 @@ class BitfinexSource(implicit system: ActorSystem) extends RateSource {
   }
 }
 
+class BlockchainInfo24h(implicit system: ActorSystem) extends RateSource {
+  val http = Http(system)
+
+  def askRates: Future[FiatRate] = {
+    for {
+      res <- http.singleRequest(HttpRequest(uri = "https://blockchain.info/q/24hrprice"))
+      body <- res match {
+        case HttpResponse(StatusCodes.OK, headers, entity, _) => entity.dataBytes.runFold(ByteString(""))(_ ++ _)
+        case resp @ HttpResponse(code, _, _, _) =>
+          resp.discardEntityBytes()
+          throw new RuntimeException("Request failed, response code: " + code)
+      }
+      val value = body.decodeString(ByteString.UTF_8).toDouble
+    } yield FiatRate(value)
+  }
+}
+
