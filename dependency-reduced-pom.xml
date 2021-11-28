@@ -204,10 +204,6 @@
           <groupId>org.codehaus.janino</groupId>
         </exclusion>
         <exclusion>
-          <artifactId>akka-http-core_2.13</artifactId>
-          <groupId>com.typesafe.akka</groupId>
-        </exclusion>
-        <exclusion>
           <artifactId>akka-stream_2.13</artifactId>
           <groupId>com.typesafe.akka</groupId>
         </exclusion>
