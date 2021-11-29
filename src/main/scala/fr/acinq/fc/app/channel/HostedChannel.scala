@@ -1,7 +1,7 @@
 package fr.acinq.fc.app.channel
 
 import akka.actor.{ActorRef, FSM}
-import akka.pattern.ask
+import akka.pattern.{ask, pipe}
 import com.softwaremill.quicklens._
 import fr.acinq.bitcoin.Crypto.PublicKey
 import fr.acinq.bitcoin.{ByteVector32, ByteVector64, Crypto, SatoshiLong}
@@ -22,19 +22,20 @@ import fr.acinq.fc.app._
 import fr.acinq.fc.app.db.Blocking.{span, timeout}
 import fr.acinq.fc.app.db.HostedChannelsDb
 import fr.acinq.fc.app.network.{HostedSync, OperationalData, PHC, PreimageBroadcastCatcher}
+import fr.acinq.fc.app.rate.{AskRate, CurrentRate}
 import scodec.bits.ByteVector
 
 import java.util.UUID
 import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
-
+import scala.concurrent.ExecutionContext.Implicits.global
 
 object HostedChannel {
   case class SendAnnouncements(force: Boolean)
 }
 
-class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannelsDb, hostedSync: ActorRef, cfg: Config) extends FSMDiagnosticActorLogging[ChannelState, HostedData] {
+class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannelsDb, hostedSync: ActorRef, rateOracle: ActorRef, cfg: Config) extends FSMDiagnosticActorLogging[ChannelState, HostedData] {
 
   lazy val channelId: ByteVector32 = Tools.hostedChanId(kit.nodeParams.nodeId.value, remoteNodeId.value)
 
@@ -101,19 +102,26 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
       val isValidFinalScriptPubkey = Helpers.Closing.isValidFinalScriptPubkey(remoteInvoke.refundScriptPubKey, allowAnySegwit = false)
       if (isWrongChain) stop(FSM.Normal) SendingHasChannelId Error(channelId, InvalidChainHash(channelId, kit.nodeParams.chainHash, remoteInvoke.chainHash).getMessage)
       else if (!isValidFinalScriptPubkey) stop(FSM.Normal) SendingHasChannelId Error(channelId, InvalidFinalScript(channelId).getMessage)
-      else stay using HC_DATA_HOST_WAIT_CLIENT_STATE_UPDATE(remoteInvoke) SendingHosted cfg.vals.hcParams.initMsg
+      else {
+        (for {
+          CurrentRate(rate) <- rateOracle.ask(AskRate).mapTo[CurrentRate]
+        } yield Tuple2(remoteInvoke, rate)).pipeTo(self)
+        stay
+      }
+
+    case Event(Tuple2(remoteInvoke: InvokeHostedChannel, rate: MilliSatoshi), HC_NOTHING) => stay using HC_DATA_HOST_WAIT_CLIENT_STATE_UPDATE(remoteInvoke) SendingHosted cfg.vals.hcParams.initMsg(rate)
 
     case Event(hostInit: InitHostedChannel, data: HC_DATA_CLIENT_WAIT_HOST_INIT) =>
       val fullySignedLCSS = LastCrossSignedState(isHost = false, data.refundScriptPubKey, initHostedChannel = hostInit, currentBlockDay,
-        localBalanceMsat = hostInit.initialClientBalanceMsat, remoteBalanceMsat = hostInit.channelCapacityMsat - hostInit.initialClientBalanceMsat, rate=0L.msat, localUpdates = 0L, remoteUpdates = 0L,
+        localBalanceMsat = hostInit.initialClientBalanceMsat, remoteBalanceMsat = hostInit.channelCapacityMsat - hostInit.initialClientBalanceMsat, rate=hostInit.initialRate, localUpdates = 0L, remoteUpdates = 0L,
         incomingHtlcs = Nil, outgoingHtlcs = Nil, localSigOfRemote = ByteVector64.Zeroes, remoteSigOfLocal = ByteVector64.Zeroes).withLocalSigOfRemote(kit.nodeParams.privateKey)
 
       if (hostInit.initialClientBalanceMsat > hostInit.channelCapacityMsat) stop(FSM.Normal) SendingHasChannelId Error(channelId, "Proposed init balance for us is larger than capacity")
       else stay using HC_DATA_CLIENT_WAIT_HOST_STATE_UPDATE(restoreEmptyData(fullySignedLCSS).commitments) SendingHosted fullySignedLCSS.stateUpdate
 
     case Event(clientSU: StateUpdate, data: HC_DATA_HOST_WAIT_CLIENT_STATE_UPDATE) =>
-      val fullySignedLCSS = LastCrossSignedState(isHost = true, data.invoke.refundScriptPubKey, initHostedChannel = cfg.vals.hcParams.initMsg, clientSU.blockDay,
-        localBalanceMsat = cfg.vals.hcParams.initMsg.channelCapacityMsat, remoteBalanceMsat = MilliSatoshi(0L), rate=MilliSatoshi(0L), localUpdates = 0L, remoteUpdates = 0L, incomingHtlcs = Nil,
+      val fullySignedLCSS = LastCrossSignedState(isHost = true, data.invoke.refundScriptPubKey, initHostedChannel = cfg.vals.hcParams.initMsg(0L.msat), clientSU.blockDay,
+        localBalanceMsat = cfg.vals.hcParams.initMsg(0L.msat).channelCapacityMsat, remoteBalanceMsat = MilliSatoshi(0L), rate=MilliSatoshi(0L), localUpdates = 0L, remoteUpdates = 0L, incomingHtlcs = Nil,
         outgoingHtlcs = Nil, remoteSigOfLocal = clientSU.localSigOfRemoteLCSS, localSigOfRemote = ByteVector64.Zeroes).withLocalSigOfRemote(kit.nodeParams.privateKey)
 
       val dh = new DuplicateHandler[HC_DATA_ESTABLISHED] {
