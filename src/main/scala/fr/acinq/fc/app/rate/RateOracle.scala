@@ -18,6 +18,13 @@ object RateOracle {
   val rateLock = new ReentrantReadWriteLock()
   val rateWrite = rateLock.writeLock()
   val rateRead = rateLock.readLock()
+
+  def getCurrentRate(): MilliSatoshi = {
+    try {
+      rateRead.lock()
+      lastRate
+    } finally rateRead.unlock()
+  }
 }
 
 class RateOracle(kit: eclair.Kit, source: RateSource) extends Actor with Logging { me =>

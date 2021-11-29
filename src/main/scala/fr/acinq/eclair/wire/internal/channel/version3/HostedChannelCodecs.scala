@@ -2,7 +2,7 @@ package fr.acinq.eclair.wire.internal.channel.version3
 
 import fr.acinq.eclair.wire.internal.channel.version3.ChannelCodecs3.Codecs.{commitmentSpecCodec, originsMapCodec}
 import fr.acinq.eclair.wire.internal.channel.version3.HCProtocolCodecs._
-import fr.acinq.eclair.wire.protocol.CommonCodecs.{bool8, bytes32, lengthDelimited, publicKey}
+import fr.acinq.eclair.wire.protocol.CommonCodecs.{bool8, bytes32, lengthDelimited, millisatoshi, publicKey}
 import fr.acinq.eclair.wire.protocol.LightningMessageCodecs._
 import fr.acinq.eclair.wire.protocol.{HasChannelId, UpdateMessage}
 import fr.acinq.fc.app.channel.{ErrorExt, HC_DATA_ESTABLISHED, HostedCommitments, HostedState}
@@ -40,7 +40,8 @@ object HostedChannelCodecs {
       (optional(bool8, errorExtCodec) withContext "remoteError") ::
       (optional(bool8, lengthDelimited(resizeChannelCodec)) withContext "resizeProposal") ::
       (optional(bool8, lengthDelimited(stateOverrideCodec)) withContext "overrideProposal") ::
-      (optional(bool8, lengthDelimited(channelAnnouncementCodec)) withContext "channelAnnouncement")
+      (optional(bool8, lengthDelimited(channelAnnouncementCodec)) withContext "channelAnnouncement") ::
+      (optional(bool8, millisatoshi) withContext "lastOracleState")
   }.as[HC_DATA_ESTABLISHED]
 
   val hostedStateCodec = {

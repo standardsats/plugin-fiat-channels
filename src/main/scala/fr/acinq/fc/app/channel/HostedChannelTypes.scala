@@ -1,6 +1,7 @@
 package fr.acinq.fc.app.channel
 
 import akka.actor.ActorRef
+import akka.event.LoggingAdapter
 import com.softwaremill.quicklens._
 import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey}
 import fr.acinq.bitcoin.{ByteVector32, ByteVector64, Crypto, Satoshi, SatoshiLong}
@@ -66,9 +67,11 @@ case class HC_DATA_CLIENT_WAIT_HOST_INIT(refundScriptPubKey: ByteVector) extends
 case class HC_DATA_CLIENT_WAIT_HOST_STATE_UPDATE(commitments: HostedCommitments) extends HostedData
 
 case class HC_DATA_ESTABLISHED(commitments: HostedCommitments,
-                               channelUpdate: ChannelUpdate, localErrors: List[ErrorExt] = Nil, remoteError: Option[ErrorExt] = None,
+                               channelUpdate: ChannelUpdate,
+                               localErrors: List[ErrorExt] = Nil, remoteError: Option[ErrorExt] = None,
                                resizeProposal: Option[ResizeChannel] = None, overrideProposal: Option[StateOverride] = None,
-                               channelAnnouncement: Option[ChannelAnnouncement] = None) extends HostedData { me =>
+                               channelAnnouncement: Option[ChannelAnnouncement] = None, lastOracleState: Option[MilliSatoshi] = None
+                              ) extends HostedData { me =>
 
   lazy val errorExt: Option[ErrorExt] = localErrors.headOption orElse remoteError
 
@@ -140,11 +143,33 @@ case class HostedCommitments(localNodeId: PublicKey, remoteNodeId: PublicKey, ch
       localSigned.add
     }
 
-  def nextLocalUnsignedLCSS(blockDay: Long): LastCrossSignedState =
+  def averageRate(log: LoggingAdapter, oldSats: MilliSatoshi, newSats: MilliSatoshi, oldRate: MilliSatoshi, newRate: MilliSatoshi): MilliSatoshi = {
+    val f1 = 1.0 / oldRate.toLong.toDouble
+    val f2 = 1.0 / newRate.toLong.toDouble
+    val s1 = oldSats.toLong.toDouble
+    val s2 = newSats.toLong.toDouble
+    val d2 = s2 - s1
+    if (s1 == 0 && s2 == 0) {
+      log.info(s"averageRate: s1 and s2 are zero, so using old rate ${oldRate}")
+      oldRate
+    } else {
+      val invRate = (s1 * f1 + d2 * f2) / s2
+      log.info(s"averageRate: f1=${f1}, f2=${f2}, s1=${s1}, s2=${s2}, d2 = ${s2 - s1}, invRate = ${invRate}")
+      MilliSatoshi(math round (1/invRate))
+    }
+  }
+
+  def nextLocalUnsignedLCSSWithRate(log: LoggingAdapter, blockDay: Long, newRate: MilliSatoshi): LastCrossSignedState = {
+    val avgRate = averageRate(log, lastCrossSignedState.localBalanceMsat, nextLocalSpec.toLocal, lastCrossSignedState.rate, newRate)
+    nextLocalUnsignedLCSS(blockDay).copy(rate = avgRate)
+  }
+
+  def nextLocalUnsignedLCSS(blockDay: Long): LastCrossSignedState = {
     LastCrossSignedState(lastCrossSignedState.isHost, lastCrossSignedState.refundScriptPubKey, lastCrossSignedState.initHostedChannel,
       blockDay = blockDay, localBalanceMsat = nextLocalSpec.toLocal, remoteBalanceMsat = nextLocalSpec.toRemote, rate=lastCrossSignedState.rate, nextTotalLocal, nextTotalRemote,
       nextLocalSpec.htlcs.collect(DirectedHtlc.incoming).toList.sortBy(_.id), nextLocalSpec.htlcs.collect(DirectedHtlc.outgoing).toList.sortBy(_.id),
       localSigOfRemote = ByteVector64.Zeroes, remoteSigOfLocal = ByteVector64.Zeroes)
+  }
 
   def sendAdd(cmd: CMD_ADD_HTLC, blockHeight: Long): Either[ChannelException, (HostedCommitments, UpdateAddHtlc)] = {
     val minExpiry = Channel.MIN_CLTV_EXPIRY_DELTA.toCltvExpiry(blockHeight)

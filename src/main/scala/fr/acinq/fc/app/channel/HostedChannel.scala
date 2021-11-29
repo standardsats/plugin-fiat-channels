@@ -35,7 +35,7 @@ object HostedChannel {
   case class SendAnnouncements(force: Boolean)
 }
 
-class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannelsDb, hostedSync: ActorRef, rateOracle: ActorRef, cfg: Config) extends FSMDiagnosticActorLogging[ChannelState, HostedData] {
+class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannelsDb, hostedSync: ActorRef, cfg: Config) extends FSMDiagnosticActorLogging[ChannelState, HostedData] {
 
   lazy val channelId: ByteVector32 = Tools.hostedChanId(kit.nodeParams.nodeId.value, remoteNodeId.value)
 
@@ -103,10 +103,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
       if (isWrongChain) stop(FSM.Normal) SendingHasChannelId Error(channelId, InvalidChainHash(channelId, kit.nodeParams.chainHash, remoteInvoke.chainHash).getMessage)
       else if (!isValidFinalScriptPubkey) stop(FSM.Normal) SendingHasChannelId Error(channelId, InvalidFinalScript(channelId).getMessage)
       else {
-        val rate = try {
-            RateOracle.rateRead.lock()
-            RateOracle.lastRate
-          } finally RateOracle.rateRead.unlock()
+        val rate = RateOracle.getCurrentRate()
         stay using HC_DATA_HOST_WAIT_CLIENT_STATE_UPDATE(remoteInvoke, rate) SendingHosted cfg.vals.hcParams.initMsg(rate)
       }
 
@@ -155,7 +152,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
       }
 
     case Event(hostSU: StateUpdate, data: HC_DATA_CLIENT_WAIT_HOST_STATE_UPDATE) =>
-      val fullySignedLCSS = data.commitments.lastCrossSignedState.copy(remoteSigOfLocal = hostSU.localSigOfRemoteLCSS)
+      val fullySignedLCSS = data.commitments.lastCrossSignedState.copy(rate = hostSU.rate, remoteSigOfLocal = hostSU.localSigOfRemoteLCSS)
       val isRemoteUpdatesMismatch = data.commitments.lastCrossSignedState.remoteUpdates != hostSU.localUpdates
       val isLocalUpdatesMismatch = data.commitments.lastCrossSignedState.localUpdates != hostSU.remoteUpdates
       val isLocalSigOk = fullySignedLCSS.verifyRemoteSig(remoteNodeId)
@@ -189,6 +186,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
       val weAreAhead = localLCSS.remoteUpdates > remoteLCSS.localUpdates || localLCSS.localUpdates > remoteLCSS.remoteUpdates
       val isLocalSigOk = remoteLCSS.verifyRemoteSig(kit.nodeParams.nodeId)
       val isRemoteSigOk = remoteLCSS.reverse.verifyRemoteSig(remoteNodeId)
+      log.info(s"Got remote signed state with rate=${remoteLCSS.rate}, we expected ${localLCSS.rate}")
 
       if (!isRemoteSigOk) {
         val (finalData, error) = withLocalError(data1, ErrorCodes.ERR_HOSTED_WRONG_REMOTE_SIG)
@@ -294,8 +292,10 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
     case Event(fail: UpdateFailMalformedHtlc, data: HC_DATA_ESTABLISHED) => processRemoteResolve(data.commitments.receiveFailMalformed(fail), data)
 
     case Event(_: CMD_SIGN, data: HC_DATA_ESTABLISHED) if data.commitments.nextLocalUpdates.nonEmpty || data.resizeProposal.isDefined =>
-      val nextLocalLCSS = data.resizeProposal.map(data.withResize).getOrElse(data).commitments.nextLocalUnsignedLCSS(currentBlockDay)
-      stay SendingHosted nextLocalLCSS.withLocalSigOfRemote(kit.nodeParams.privateKey).stateUpdate
+      val oracleRate = RateOracle.getCurrentRate()
+      val newRate = if (oracleRate == 0.msat) data.commitments.lastCrossSignedState.rate else oracleRate
+      val nextLocalLCSS = data.resizeProposal.map(data.withResize).getOrElse(data).commitments.nextLocalUnsignedLCSSWithRate(log, currentBlockDay, newRate)
+      stay StoringAndUsing data.copy(lastOracleState = Some(nextLocalLCSS.rate)) SendingHosted nextLocalLCSS.withLocalSigOfRemote(kit.nodeParams.privateKey).stateUpdate
 
     case Event(remoteSU: StateUpdate, data: HC_DATA_ESTABLISHED) if remoteSU.localSigOfRemoteLCSS != data.commitments.lastCrossSignedState.remoteSigOfLocal => attemptStateUpdate(remoteSU, data)
   }
@@ -691,7 +691,12 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
   }
 
   def attemptStateUpdate(remoteSU: StateUpdate, data: HC_DATA_ESTABLISHED): HostedFsmState = {
-    val lcss1 = data.commitments.nextLocalUnsignedLCSS(remoteSU.blockDay).copy(remoteSigOfLocal = remoteSU.localSigOfRemoteLCSS).withLocalSigOfRemote(kit.nodeParams.privateKey)
+    log.info(s"PLGN FC, attemptStateUpdate with ${remoteSU}")
+    val newRate = data.lastOracleState.getOrElse(data.commitments.lastCrossSignedState.rate)
+    log.info(s"Channel old rate is ${data.commitments.lastCrossSignedState.rate}")
+    log.info(s"My new rate is ${newRate}")
+    val lcss1 = data.commitments.nextLocalUnsignedLCSS(remoteSU.blockDay).copy(rate = newRate, remoteSigOfLocal = remoteSU.localSigOfRemoteLCSS).withLocalSigOfRemote(kit.nodeParams.privateKey)
+    log.info(s"New channel rate is ${lcss1.rate}")
     val commits1 = data.commitments.copy(lastCrossSignedState = lcss1, localSpec = data.commitments.nextLocalSpec, nextLocalUpdates = Nil, nextRemoteUpdates = Nil)
     val isRemoteSigOk = lcss1.verifyRemoteSig(remoteNodeId)
     val isBlockDayWrong = isBlockDayOutOfSync(remoteSU)
