@@ -337,8 +337,8 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
 
     case Event(remoteSU: StateUpdate, data: HC_DATA_ESTABLISHED)
       if data.commitments.lastCrossSignedState.isHost && data.overrideProposal.isDefined =>
-      val StateOverride(savedBlockDay, savedLocalBalanceMsat, savedLocalUpdates, savedRemoteUpdates, _) = data.overrideProposal.get
-      val lcss = makeOverridingLocallySignedLCSS(data.commitments, savedLocalBalanceMsat, savedLocalUpdates, savedRemoteUpdates, savedBlockDay)
+      val StateOverride(savedBlockDay, savedLocalBalanceMsat, savedLocalUpdates, savedRemoteUpdates, rate, _) = data.overrideProposal.get
+      val lcss = makeOverridingLocallySignedLCSS(data.commitments, savedLocalBalanceMsat, savedLocalUpdates, savedRemoteUpdates, savedBlockDay, rate)
       val completeLocallySignedLCSS = lcss.copy(remoteSigOfLocal = remoteSU.localSigOfRemoteLCSS)
       val isRemoteSigOk = completeLocallySignedLCSS.verifyRemoteSig(remoteNodeId)
 
@@ -404,8 +404,9 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
         log.info(s"PLGN FC, scheduling override proposal for peer=$remoteNodeId")
         val newLocalUpdates = data.commitments.lastCrossSignedState.localUpdates + data.commitments.nextLocalUpdates.size + 1
         val newRemoteUpdates = data.commitments.lastCrossSignedState.remoteUpdates + data.commitments.nextRemoteUpdates.size + 1
-        val overrideLCSS = makeOverridingLocallySignedLCSS(data.commitments, cmd.newLocalBalance, newLocalUpdates, newRemoteUpdates, currentBlockDay)
-        val localSO = StateOverride(overrideLCSS.blockDay, overrideLCSS.localBalanceMsat, overrideLCSS.localUpdates, overrideLCSS.remoteUpdates, overrideLCSS.localSigOfRemote)
+        val rate = data.commitments.lastCrossSignedState.rate
+        val overrideLCSS = makeOverridingLocallySignedLCSS(data.commitments, cmd.newLocalBalance, newLocalUpdates, newRemoteUpdates, currentBlockDay, rate)
+        val localSO = StateOverride(overrideLCSS.blockDay, overrideLCSS.localBalanceMsat, overrideLCSS.localUpdates, overrideLCSS.remoteUpdates, rate, overrideLCSS.localSigOfRemote)
         stay StoringAndUsing data.copy(overrideProposal = Some(localSO)) replying CMDResSuccess(cmd) SendingHosted localSO
       }
 
@@ -563,9 +564,9 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
     Announcements.makeChannelUpdate(kit.nodeParams.chainHash, kit.nodeParams.privateKey, remoteNodeId, shortChannelId, CltvExpiryDelta(cfg.vals.hcParams.cltvDeltaBlocks),
       cfg.vals.hcParams.htlcMinimum, cfg.vals.hcParams.feeBase, cfg.vals.hcParams.feeProportionalMillionths, localLCSS.initHostedChannel.channelCapacityMsat, enable)
 
-  def makeOverridingLocallySignedLCSS(commits: HostedCommitments, newLocalBalance: MilliSatoshi, newLocalUpdates: Long, newRemoteUpdates: Long, overrideBlockDay: Long): LastCrossSignedState =
+  def makeOverridingLocallySignedLCSS(commits: HostedCommitments, newLocalBalance: MilliSatoshi, newLocalUpdates: Long, newRemoteUpdates: Long, overrideBlockDay: Long, rate: MilliSatoshi): LastCrossSignedState =
     commits.lastCrossSignedState.copy(localBalanceMsat = newLocalBalance, remoteBalanceMsat = commits.lastCrossSignedState.initHostedChannel.channelCapacityMsat - newLocalBalance, incomingHtlcs = Nil,
-      outgoingHtlcs = Nil, localUpdates = newLocalUpdates, remoteUpdates = newRemoteUpdates, blockDay = overrideBlockDay, remoteSigOfLocal = ByteVector64.Zeroes).withLocalSigOfRemote(kit.nodeParams.privateKey)
+      outgoingHtlcs = Nil, localUpdates = newLocalUpdates, remoteUpdates = newRemoteUpdates, blockDay = overrideBlockDay, remoteSigOfLocal = ByteVector64.Zeroes, rate = rate).withLocalSigOfRemote(kit.nodeParams.privateKey)
 
   def restoreEmptyData(localLCSS: LastCrossSignedState): HC_DATA_ESTABLISHED =
     HC_DATA_ESTABLISHED(HostedCommitments(localNodeId = kit.nodeParams.nodeId, remoteNodeId, channelId,

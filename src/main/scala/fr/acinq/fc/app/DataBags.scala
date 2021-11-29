@@ -68,7 +68,7 @@ case class LastCrossSignedState(isHost: Boolean,
       hostFlag.toByte)
   }
 
-  def stateUpdate: StateUpdate = StateUpdate(blockDay, localUpdates, remoteUpdates, localSigOfRemote)
+  def stateUpdate: StateUpdate = StateUpdate(blockDay, localUpdates, remoteUpdates, rate, localSigOfRemote)
 
   def verifyRemoteSig(pubKey: PublicKey): Boolean = Crypto.verifySignature(hostedSigHash, remoteSigOfLocal, pubKey)
 
@@ -78,9 +78,9 @@ case class LastCrossSignedState(isHost: Boolean,
   }
 }
 
-case class StateUpdate(blockDay: Long, localUpdates: Long, remoteUpdates: Long, localSigOfRemoteLCSS: ByteVector64) extends HostedChannelMessage
+case class StateUpdate(blockDay: Long, localUpdates: Long, remoteUpdates: Long, rate: MilliSatoshi, localSigOfRemoteLCSS: ByteVector64) extends HostedChannelMessage
 
-case class StateOverride(blockDay: Long, localBalanceMsat: MilliSatoshi, localUpdates: Long, remoteUpdates: Long, localSigOfRemoteLCSS: ByteVector64) extends HostedChannelMessage
+case class StateOverride(blockDay: Long, localBalanceMsat: MilliSatoshi, localUpdates: Long, remoteUpdates: Long, rate: MilliSatoshi, localSigOfRemoteLCSS: ByteVector64) extends HostedChannelMessage
 
 case class AnnouncementSignature(nodeSignature: ByteVector64, wantsReply: Boolean) extends HostedChannelMessage
 
