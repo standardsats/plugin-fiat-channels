@@ -22,7 +22,7 @@ import fr.acinq.fc.app._
 import fr.acinq.fc.app.db.Blocking.{span, timeout}
 import fr.acinq.fc.app.db.HostedChannelsDb
 import fr.acinq.fc.app.network.{HostedSync, OperationalData, PHC, PreimageBroadcastCatcher}
-import fr.acinq.fc.app.rate.{AskRate, CurrentRate}
+import fr.acinq.fc.app.rate.RateOracle
 import scodec.bits.ByteVector
 
 import java.util.UUID
@@ -103,13 +103,12 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
       if (isWrongChain) stop(FSM.Normal) SendingHasChannelId Error(channelId, InvalidChainHash(channelId, kit.nodeParams.chainHash, remoteInvoke.chainHash).getMessage)
       else if (!isValidFinalScriptPubkey) stop(FSM.Normal) SendingHasChannelId Error(channelId, InvalidFinalScript(channelId).getMessage)
       else {
-        (for {
-          CurrentRate(rate) <- rateOracle.ask(AskRate).mapTo[CurrentRate]
-        } yield Tuple2(remoteInvoke, rate)).pipeTo(self)
-        stay
+        val rate = try {
+            RateOracle.rateRead.lock()
+            RateOracle.lastRate
+          } finally RateOracle.rateRead.unlock()
+        stay using HC_DATA_HOST_WAIT_CLIENT_STATE_UPDATE(remoteInvoke, rate) SendingHosted cfg.vals.hcParams.initMsg(rate)
       }
-
-    case Event(Tuple2(remoteInvoke: InvokeHostedChannel, rate: MilliSatoshi), HC_NOTHING) => stay using HC_DATA_HOST_WAIT_CLIENT_STATE_UPDATE(remoteInvoke) SendingHosted cfg.vals.hcParams.initMsg(rate)
 
     case Event(hostInit: InitHostedChannel, data: HC_DATA_CLIENT_WAIT_HOST_INIT) =>
       val fullySignedLCSS = LastCrossSignedState(isHost = false, data.refundScriptPubKey, initHostedChannel = hostInit, currentBlockDay,
@@ -120,8 +119,8 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
       else stay using HC_DATA_CLIENT_WAIT_HOST_STATE_UPDATE(restoreEmptyData(fullySignedLCSS).commitments) SendingHosted fullySignedLCSS.stateUpdate
 
     case Event(clientSU: StateUpdate, data: HC_DATA_HOST_WAIT_CLIENT_STATE_UPDATE) =>
-      val fullySignedLCSS = LastCrossSignedState(isHost = true, data.invoke.refundScriptPubKey, initHostedChannel = cfg.vals.hcParams.initMsg(0L.msat), clientSU.blockDay,
-        localBalanceMsat = cfg.vals.hcParams.initMsg(0L.msat).channelCapacityMsat, remoteBalanceMsat = MilliSatoshi(0L), rate=MilliSatoshi(0L), localUpdates = 0L, remoteUpdates = 0L, incomingHtlcs = Nil,
+      val fullySignedLCSS = LastCrossSignedState(isHost = true, data.invoke.refundScriptPubKey, initHostedChannel = cfg.vals.hcParams.initMsg(data.rate), clientSU.blockDay,
+        localBalanceMsat = cfg.vals.hcParams.initMsg(0L.msat).channelCapacityMsat, remoteBalanceMsat = MilliSatoshi(0L), rate=data.rate, localUpdates = 0L, remoteUpdates = 0L, incomingHtlcs = Nil,
         outgoingHtlcs = Nil, remoteSigOfLocal = clientSU.localSigOfRemoteLCSS, localSigOfRemote = ByteVector64.Zeroes).withLocalSigOfRemote(kit.nodeParams.privateKey)
 
       val dh = new DuplicateHandler[HC_DATA_ESTABLISHED] {
@@ -133,7 +132,10 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
       val isLocalSigOk = fullySignedLCSS.verifyRemoteSig(remoteNodeId)
       val isBlockDayWrong = isBlockDayOutOfSync(clientSU)
 
-      if (isBlockDayWrong) stop(FSM.Normal) SendingHasChannelId Error(channelId, ErrorCodes.ERR_HOSTED_WRONG_BLOCKDAY)
+      if (isBlockDayWrong) {
+        log.info(s"PLGN FC, Wrong peer day their=${clientSU.blockDay} ours=$currentBlockDay, peer=$remoteNodeId")
+        stop(FSM.Normal) SendingHasChannelId Error(channelId, ErrorCodes.ERR_HOSTED_WRONG_BLOCKDAY)
+      }
       else if (!isLocalSigOk) stop(FSM.Normal) SendingHasChannelId Error(channelId, ErrorCodes.ERR_HOSTED_WRONG_REMOTE_SIG)
       else {
         dh.execute(data1) match {
@@ -159,7 +161,10 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
       val isLocalSigOk = fullySignedLCSS.verifyRemoteSig(remoteNodeId)
       val isBlockDayWrong = isBlockDayOutOfSync(hostSU)
 
-      if (isBlockDayWrong) stop(FSM.Normal) SendingHasChannelId Error(channelId, ErrorCodes.ERR_HOSTED_WRONG_BLOCKDAY)
+      if (isBlockDayWrong) {
+        log.info(s"PLGN FC, Wrong peer day their=${hostSU.blockDay} ours=$currentBlockDay, peer=$remoteNodeId")
+        stop(FSM.Normal) SendingHasChannelId Error(channelId, ErrorCodes.ERR_HOSTED_WRONG_BLOCKDAY)
+      }
       else if (!isLocalSigOk) stop(FSM.Normal) SendingHasChannelId Error(channelId, ErrorCodes.ERR_HOSTED_WRONG_REMOTE_SIG)
       else if (isRemoteUpdatesMismatch) stop(FSM.Normal) SendingHasChannelId Error(channelId, "Proposed remote/local update number mismatch")
       else if (isLocalUpdatesMismatch) stop(FSM.Normal) SendingHasChannelId Error(channelId, "Proposed local/remote update number mismatch")

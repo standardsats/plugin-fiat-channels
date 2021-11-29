@@ -59,7 +59,7 @@ sealed trait HostedData
 
 case object HC_NOTHING extends HostedData
 
-case class HC_DATA_HOST_WAIT_CLIENT_STATE_UPDATE(invoke: InvokeHostedChannel) extends HostedData
+case class HC_DATA_HOST_WAIT_CLIENT_STATE_UPDATE(invoke: InvokeHostedChannel, rate: MilliSatoshi) extends HostedData
 
 case class HC_DATA_CLIENT_WAIT_HOST_INIT(refundScriptPubKey: ByteVector) extends HostedData
 
@@ -142,7 +142,7 @@ case class HostedCommitments(localNodeId: PublicKey, remoteNodeId: PublicKey, ch
 
   def nextLocalUnsignedLCSS(blockDay: Long): LastCrossSignedState =
     LastCrossSignedState(lastCrossSignedState.isHost, lastCrossSignedState.refundScriptPubKey, lastCrossSignedState.initHostedChannel,
-      blockDay = blockDay, localBalanceMsat = nextLocalSpec.toLocal, remoteBalanceMsat = nextLocalSpec.toRemote, rate=0L.msat, nextTotalLocal, nextTotalRemote,
+      blockDay = blockDay, localBalanceMsat = nextLocalSpec.toLocal, remoteBalanceMsat = nextLocalSpec.toRemote, rate=lastCrossSignedState.rate, nextTotalLocal, nextTotalRemote,
       nextLocalSpec.htlcs.collect(DirectedHtlc.incoming).toList.sortBy(_.id), nextLocalSpec.htlcs.collect(DirectedHtlc.outgoing).toList.sortBy(_.id),
       localSigOfRemote = ByteVector64.Zeroes, remoteSigOfLocal = ByteVector64.Zeroes)
 
