@@ -55,7 +55,7 @@ class BlockchainInfo24h(implicit system: ActorSystem) extends RateSource {
           resp.discardEntityBytes()
           throw new RuntimeException("Request failed, response code: " + code)
       }
-      val value = body.decodeString(ByteString.UTF_8).toDouble
+      value = body.decodeString(ByteString.UTF_8).toDouble
     } yield FiatRate(value)
   }
 }
@@ -67,18 +67,52 @@ trait BinanceJsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
 }
 
 class BinanceSource(implicit system: ActorSystem) extends RateSource with BinanceJsonSupport {
-    val http = Http(system)
+  val http = Http(system)
 
-    def askRates: Future[FiatRate] = {
-      for {
-        res <- http.singleRequest(HttpRequest(uri = "https://api.binance.com/api/v3/avgPrice?symbol=BTCUSDT"))
-        body <- res match {
-          case HttpResponse(StatusCodes.OK, headers, entity, _) => entity.dataBytes.runFold(ByteString(""))(_ ++ _)
-          case resp @ HttpResponse(code, _, _, _) =>
-            resp.discardEntityBytes()
-            throw new RuntimeException("Request failed, response code: " + code)
-        }
-        values <- Unmarshal(body).to[BinanceResponse]
-      } yield FiatRate(values.price.toDouble)
-    }
+  def askRates: Future[FiatRate] = {
+    for {
+      res <- http.singleRequest(HttpRequest(uri = "https://api.binance.com/api/v3/avgPrice?symbol=BTCUSDT"))
+      body <- res match {
+        case HttpResponse(StatusCodes.OK, headers, entity, _) => entity.dataBytes.runFold(ByteString(""))(_ ++ _)
+        case resp @ HttpResponse(code, _, _, _) =>
+          resp.discardEntityBytes()
+          throw new RuntimeException("Request failed, response code: " + code)
+      }
+      values <- Unmarshal(body).to[BinanceResponse]
+    } yield FiatRate(values.price.toDouble)
   }
+}
+
+class BinanceSourceModified(predicate: Double => Double, implicit val system: ActorSystem) extends RateSource with BinanceJsonSupport {
+  val http = Http(system)
+
+  def askRates: Future[FiatRate] = {
+    for {
+      res <- http.singleRequest(HttpRequest(uri = "https://api.binance.com/api/v3/avgPrice?symbol=BTCUSDT"))
+      body <- res match {
+        case HttpResponse(StatusCodes.OK, headers, entity, _) => entity.dataBytes.runFold(ByteString(""))(_ ++ _)
+        case resp @ HttpResponse(code, _, _, _) =>
+          resp.discardEntityBytes()
+          throw new RuntimeException("Request failed, response code: " + code)
+      }
+      values <- Unmarshal(body).to[BinanceResponse]
+    } yield FiatRate(predicate(values.price.toDouble))
+  }
+}
+
+class BlockchainInfo24hModified(predicate: Double => Double, implicit val system: ActorSystem) extends RateSource {
+  val http = Http(system)
+
+  def askRates: Future[FiatRate] = {
+    for {
+      res <- http.singleRequest(HttpRequest(uri = "https://blockchain.info/q/24hrprice"))
+      body <- res match {
+        case HttpResponse(StatusCodes.OK, headers, entity, _) => entity.dataBytes.runFold(ByteString(""))(_ ++ _)
+        case resp @ HttpResponse(code, _, _, _) =>
+          resp.discardEntityBytes()
+          throw new RuntimeException("Request failed, response code: " + code)
+      }
+      value = body.decodeString(ByteString.UTF_8).toDouble
+    } yield FiatRate(predicate(value))
+  }
+}

@@ -285,7 +285,9 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
 
     // IMPORTANT: Peer adding and failing HTLCs is only accepted in NORMAL
 
-    case Event(add: UpdateAddHtlc, data: HC_DATA_ESTABLISHED) => processRemoteResolve(data.commitments.receiveAdd(add), data)
+    case Event(add: UpdateAddHtlc, data: HC_DATA_ESTABLISHED) =>
+      log.info(s"Received UpdateAddHtlc for amount ${add.amountMsat} msat")
+      processRemoteResolve(data.commitments.receiveAdd(add), data)
 
     case Event(fail: UpdateFailHtlc, data: HC_DATA_ESTABLISHED) => processRemoteResolve(data.commitments.receiveFail(fail), data)
 
@@ -293,6 +295,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
 
     case Event(_: CMD_SIGN, data: HC_DATA_ESTABLISHED) if data.commitments.nextLocalUpdates.nonEmpty || data.resizeProposal.isDefined =>
       val oracleRate = RateOracle.getCurrentRate()
+      log.info(s"Current oracle rate is ${oracleRate}")
       val newRate = if (oracleRate == 0.msat) data.commitments.lastCrossSignedState.rate else oracleRate
       val nextLocalLCSS = data.resizeProposal.map(data.withResize).getOrElse(data).commitments.nextLocalUnsignedLCSSWithRate(log, currentBlockDay, newRate)
       stay StoringAndUsing data.copy(lastOracleState = Some(nextLocalLCSS.rate)) SendingHosted nextLocalLCSS.withLocalSigOfRemote(kit.nodeParams.privateKey).stateUpdate

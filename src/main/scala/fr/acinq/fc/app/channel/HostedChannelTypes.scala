@@ -160,7 +160,7 @@ case class HostedCommitments(localNodeId: PublicKey, remoteNodeId: PublicKey, ch
   }
 
   def nextLocalUnsignedLCSSWithRate(log: LoggingAdapter, blockDay: Long, newRate: MilliSatoshi): LastCrossSignedState = {
-    val avgRate = averageRate(log, lastCrossSignedState.localBalanceMsat, nextLocalSpec.toLocal, lastCrossSignedState.rate, newRate)
+    val avgRate = averageRate(log, lastCrossSignedState.remoteBalanceMsat, lastCrossSignedState.initHostedChannel.channelCapacityMsat - nextLocalSpec.toLocal, lastCrossSignedState.rate, newRate)
     nextLocalUnsignedLCSS(blockDay).copy(rate = avgRate)
   }
 
