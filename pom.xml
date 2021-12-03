@@ -116,6 +116,12 @@
             <scope>provided</scope>
         </dependency>
         <dependency>
+            <groupId>fr.acinq.hedgebot</groupId>
+            <artifactId>eclair-hedge_2.13</artifactId>
+            <version>${eclair.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
             <groupId>com.iheart</groupId>
             <artifactId>ficus_2.13</artifactId>
             <version>1.5.1</version>
