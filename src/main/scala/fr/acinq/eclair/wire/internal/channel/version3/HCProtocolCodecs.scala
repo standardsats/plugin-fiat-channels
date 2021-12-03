@@ -5,8 +5,10 @@ import fr.acinq.eclair.wire.protocol.LightningMessageCodecs._
 import fr.acinq.eclair.wire.protocol._
 import fr.acinq.fc.app.FC._
 import fr.acinq.fc.app._
+import scodec.Attempt.Successful
+import scodec.bits.{BitVector, ByteVector}
 import scodec.codecs._
-import scodec.{Attempt, Err}
+import scodec.{Attempt, Codec, DecodeResult, Err}
 
 
 object HCProtocolCodecs {
@@ -85,6 +87,8 @@ object HCProtocolCodecs {
 
   val replyPreimagesCodec = (listOfN(uint16, bytes32) withContext "preimages").as[ReplyPreimages]
 
+  val replyCurrentRateCodec = (millisatoshi withContext "rate").as[ReplyCurrentRate]
+
   // HC messages which don't have channel id
 
   def decodeHostedMessage(wrap: UnknownMessage): Attempt[HostedChannelMessage] = {
@@ -104,6 +108,8 @@ object HCProtocolCodecs {
       case HC_REPLY_PUBLIC_HOSTED_CHANNELS_END_TAG => replyPublicHostedChannelsEndCodec.decode(bitVector)
       case HC_QUERY_PREIMAGES_TAG => queryPreimagesCodec.decode(bitVector)
       case HC_REPLY_PREIMAGES_TAG => replyPreimagesCodec.decode(bitVector)
+      case HC_QUERY_RATE_TAG => provide(QueryCurrentRate()).decode(bitVector)
+      case HC_REPLY_RATE_TAG => replyCurrentRateCodec.decode(bitVector)
     }
 
     decodeAttempt.map(_.value)
@@ -123,6 +129,8 @@ object HCProtocolCodecs {
     case msg: ReplyPublicHostedChannelsEnd => UnknownMessage(HC_REPLY_PUBLIC_HOSTED_CHANNELS_END_TAG, replyPublicHostedChannelsEndCodec.encode(msg).require.toByteVector)
     case msg: QueryPreimages => UnknownMessage(HC_QUERY_PREIMAGES_TAG, queryPreimagesCodec.encode(msg).require.toByteVector)
     case msg: ReplyPreimages => UnknownMessage(HC_REPLY_PREIMAGES_TAG, replyPreimagesCodec.encode(msg).require.toByteVector)
+    case msg: QueryCurrentRate => UnknownMessage(HC_QUERY_RATE_TAG, provide(QueryCurrentRate()).encode(msg).require.toByteVector)
+    case msg: ReplyCurrentRate => UnknownMessage(HC_REPLY_RATE_TAG, replyCurrentRateCodec.encode(msg).require.toByteVector)
   }
 
   // Normal channel messages which are also used in HC

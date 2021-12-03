@@ -105,3 +105,9 @@ case class ReplyPublicHostedChannelsEnd(chainHash: ByteVector32) extends HostedC
 case class QueryPreimages(hashes: List[ByteVector32] = Nil) extends HostedChannelMessage
 
 case class ReplyPreimages(preimages: List[ByteVector32] = Nil) extends HostedChannelMessage
+
+// Fiat
+
+case class QueryCurrentRate() extends HostedChannelMessage
+
+case class ReplyCurrentRate(rate: MilliSatoshi) extends HostedChannelMessage
