@@ -286,3 +286,8 @@ case class FCSuspended(nodeId: PublicKey, isHost: Boolean, isLocal: Boolean, des
   override def message: String = s"HCSuspended, isHost=$isHost, isLocal=$isLocal, peer=$nodeId, description=$description"
   override def senderEntity: String = "FC"
 }
+
+case class FCHedgeLiability(amount: MilliSatoshi, price: MilliSatoshi) extends fr.acinq.hedgebot.HedgeBotMessage {
+  override def message: String = s"$amount:$price"
+  override def senderEntity: String = "FC"
+}
