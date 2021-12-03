@@ -149,8 +149,8 @@ case class HostedCommitments(localNodeId: PublicKey, remoteNodeId: PublicKey, ch
     val s1 = oldSats.toLong.toDouble
     val s2 = newSats.toLong.toDouble
     val d2 = s2 - s1
-    if (s1 == 0 && s2 == 0) {
-      log.info(s"averageRate: s1 and s2 are zero, so using old rate ${oldRate}")
+    if (s2 == 0) {
+      log.info(s"averageRate: s2 is zero, so using old rate ${oldRate}")
       oldRate
     } else {
       val invRate = (s1 * f1 + d2 * f2) / s2
@@ -160,8 +160,23 @@ case class HostedCommitments(localNodeId: PublicKey, remoteNodeId: PublicKey, ch
   }
 
   def nextLocalUnsignedLCSSWithRate(log: LoggingAdapter, blockDay: Long, newRate: MilliSatoshi): LastCrossSignedState = {
-    val avgRate = averageRate(log, lastCrossSignedState.remoteBalanceMsat, lastCrossSignedState.initHostedChannel.channelCapacityMsat - nextLocalSpec.toLocal, lastCrossSignedState.rate, newRate)
+    log.info(s"Balances before local:${lastCrossSignedState.localBalanceMsat} remote:${lastCrossSignedState.remoteBalanceMsat}")
+    log.info(s"Balances after local:${nextLocalSpec.toLocal} remote:${nextLocalSpec.toRemote}")
+    val capacity = lastCrossSignedState.initHostedChannel.channelCapacityMsat
+    val avgRate = averageRate(log, capacity - lastCrossSignedState.localBalanceMsat, capacity - nextLocalSpec.toLocal, lastCrossSignedState.rate, newRate)
+    log.info(s"New avg rate: $avgRate")
     nextLocalUnsignedLCSS(blockDay).copy(rate = avgRate)
+  }
+
+  def validateFiatSpend(newRate: MilliSatoshi): Boolean = {
+    val f1 = 1.0 / lastCrossSignedState.rate.toLong.toDouble
+    val f2 = 1.0 / newRate.toLong.toDouble
+    val capacity = lastCrossSignedState.initHostedChannel.channelCapacityMsat
+    val s1 = (capacity - lastCrossSignedState.localBalanceMsat).toLong.toDouble
+    val s2 = (capacity - nextLocalSpec.toLocal).toLong.toDouble
+    val d2 = s2 - s1
+    // Either we increasing fiat balance or cannot spend it more than old fiat balance was
+    d2 >= 0 || d2 * f2 < s1 * f1
   }
 
   def nextLocalUnsignedLCSS(blockDay: Long): LastCrossSignedState = {

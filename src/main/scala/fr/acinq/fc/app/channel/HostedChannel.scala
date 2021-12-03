@@ -297,8 +297,16 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
       val oracleRate = RateOracle.getCurrentRate()
       log.info(s"Current oracle rate is ${oracleRate}")
       val newRate = if (oracleRate == 0.msat) data.commitments.lastCrossSignedState.rate else oracleRate
-      val nextLocalLCSS = data.resizeProposal.map(data.withResize).getOrElse(data).commitments.nextLocalUnsignedLCSSWithRate(log, currentBlockDay, newRate)
-      stay StoringAndUsing data.copy(lastOracleState = Some(nextLocalLCSS.rate)) SendingHosted nextLocalLCSS.withLocalSigOfRemote(kit.nodeParams.privateKey).stateUpdate
+      val commitments = data.resizeProposal.map(data.withResize).getOrElse(data).commitments
+      val nextLocalLCSS = commitments.nextLocalUnsignedLCSSWithRate(log, currentBlockDay, newRate)
+      if (commitments.validateFiatSpend(newRate)) {
+        log.info(s"Next lastOracleState: ${Some(nextLocalLCSS.rate)}")
+        stay StoringAndUsing data.copy(lastOracleState = Some(nextLocalLCSS.rate)) SendingHosted nextLocalLCSS.withLocalSigOfRemote(kit.nodeParams.privateKey).stateUpdate
+      } else {
+        log.error("Tried to spend more fiat that was in the channel")
+        val (finalData, error) = withLocalError(data, ErrorCodes.ERR_NOT_ENOUGH_FIAT)
+        goto(CLOSED) StoringAndUsing finalData SendingHasChannelId error
+      }
 
     case Event(remoteSU: StateUpdate, data: HC_DATA_ESTABLISHED) if remoteSU.localSigOfRemoteLCSS != data.commitments.lastCrossSignedState.remoteSigOfLocal => attemptStateUpdate(remoteSU, data)
   }
