@@ -309,6 +309,10 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
       }
 
     case Event(remoteSU: StateUpdate, data: HC_DATA_ESTABLISHED) if remoteSU.localSigOfRemoteLCSS != data.commitments.lastCrossSignedState.remoteSigOfLocal => attemptStateUpdate(remoteSU, data)
+
+    case Event(_: QueryCurrentRate, data: HC_DATA_ESTABLISHED) =>
+      val oracleRate = RateOracle.getCurrentRate()
+      stay SendingHosted ReplyCurrentRate(oracleRate)
   }
 
   when(CLOSED) {

@@ -84,7 +84,7 @@ object FC {
   val hostedMessageTags: Set[Int] =
     Set(HC_INVOKE_HOSTED_CHANNEL_TAG, HC_INIT_HOSTED_CHANNEL_TAG, HC_LAST_CROSS_SIGNED_STATE_TAG, HC_STATE_UPDATE_TAG,
       HC_STATE_OVERRIDE_TAG, HC_HOSTED_CHANNEL_BRANDING_TAG, HC_ANNOUNCEMENT_SIGNATURE_TAG, HC_RESIZE_CHANNEL_TAG,
-      HC_ASK_BRANDING_INFO)
+      HC_ASK_BRANDING_INFO, HC_QUERY_RATE_TAG, HC_REPLY_RATE_TAG)
 
   val preimageQueryTags: Set[Int] = Set(HC_QUERY_PREIMAGES_TAG, HC_REPLY_PREIMAGES_TAG)
 
@@ -114,7 +114,7 @@ class FC extends Plugin with RouteProvider {
     implicit val coreActorSystem: ActorSystem = eclairKit.system
     preimageRef = eclairKit.system actorOf Props(classOf[PreimageBroadcastCatcher], new PreimagesDb(config.db), eclairKit, config.vals)
     syncRef = eclairKit.system actorOf Props(classOf[HostedSync], eclairKit, new HostedUpdatesDb(config.db), config.vals.phcConfig)
-    rateOracleRef = eclairKit.system actorOf Props(classOf[RateOracle], eclairKit, new BlockchainInfo24hModified(price => price * 10.0, implicitly))
+    rateOracleRef = eclairKit.system actorOf Props(classOf[RateOracle], eclairKit, new BlockchainInfo24hModified(price => price * 1.0, implicitly))
     workerRef = eclairKit.system actorOf Props(classOf[Worker], eclairKit, syncRef, rateOracleRef, preimageRef, channelsDb, config)
     kit = eclairKit
   }
