@@ -26,12 +26,12 @@ trait RateSource {
   def askRates: Future[FiatRate]
 }
 
-class BitfinexSource(implicit system: ActorSystem) extends RateSource {
+class BitfinexSource(ticker: String = "tBTCUSD", implicit val system: ActorSystem) extends RateSource {
   val http = Http(system)
 
   def askRates: Future[FiatRate] = {
     for {
-      res <- http.singleRequest(HttpRequest(uri = "https://api-pub.bitfinex.com/v2/ticker/tBTCUSD"))
+      res <- http.singleRequest(HttpRequest(uri = "https://api-pub.bitfinex.com/v2/ticker/" + ticker))
       body <- res match {
         case HttpResponse(StatusCodes.OK, headers, entity, _) => entity.dataBytes.runFold(ByteString(""))(_ ++ _)
         case resp @ HttpResponse(code, _, _, _) =>

@@ -36,7 +36,7 @@ class RateOracle(kit: eclair.Kit, source: RateSource) extends Actor with Logging
       source.askRates.pipeTo(self)
 
     case FiatRate(rate) =>
-      logger.info("Got response, rate: " + rate + " USD/BTC")
+      logger.info("Got response, rate: " + rate + " EUR/BTC")
       try {
         RateOracle.rateWrite.lock()
         RateOracle.lastRate = (math round (100_000_000_000L.toDouble / rate)).msat
