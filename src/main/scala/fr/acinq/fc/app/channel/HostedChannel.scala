@@ -732,6 +732,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
     } else {
       val commitments1 = clearOrigin(commits1, data.commitments)
       context.system.eventStream publish AvailableBalanceChanged(self, channelId, shortChannelId, commitments = commitments1)
+      context.system.eventStream publish FCHedgeLiability(MilliSatoshi(1), MilliSatoshi(1))
       stay StoringAndUsing data.copy(commitments = commitments1) RelayingRemoteUpdates data.commitments SendingHosted commits1.lastCrossSignedState.stateUpdate
     }
   }
