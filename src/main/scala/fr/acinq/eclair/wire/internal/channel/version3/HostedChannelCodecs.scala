@@ -40,6 +40,7 @@ object HostedChannelCodecs {
       (optional(bool8, errorExtCodec) withContext "remoteError") ::
       (optional(bool8, lengthDelimited(resizeChannelCodec)) withContext "resizeProposal") ::
       (optional(bool8, lengthDelimited(stateOverrideCodec)) withContext "overrideProposal") ::
+      (optional(bool8, lengthDelimited(marginChannelCodec)) withContext "marginProposal") ::
       (optional(bool8, lengthDelimited(channelAnnouncementCodec)) withContext "channelAnnouncement") ::
       (optional(bool8, millisatoshi) withContext "lastOracleState")
   }.as[HC_DATA_ESTABLISHED]

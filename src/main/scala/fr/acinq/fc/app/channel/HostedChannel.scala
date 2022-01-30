@@ -79,6 +79,8 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
 
     case Event(resize: ResizeChannel, data: HC_DATA_ESTABLISHED) if data.commitments.lastCrossSignedState.isHost => processResizeProposal(stay, resize, data)
 
+    case Event(margin: MarginChannel, data: HC_DATA_ESTABLISHED) if data.commitments.lastCrossSignedState.isHost => processMarginProposal(stay, margin, data)
+
     case Event(cmd: CurrentBlockCount, data: HC_DATA_ESTABLISHED) => processBlockCount(stay, cmd.blockCount, data)
 
     case Event(fulfill: UpdateFulfillHtlc, data: HC_DATA_ESTABLISHED) => processIncomingFulfill(stay, fulfill, data)
@@ -182,6 +184,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
     case Event(remoteLCSS: LastCrossSignedState, data: HC_DATA_ESTABLISHED) =>
       val localLCSS: LastCrossSignedState = data.commitments.lastCrossSignedState // In any case our LCSS is the current one
       val data1 = data.resizeProposal.filter(_ isRemoteResized remoteLCSS).map(data.withResize).getOrElse(data) // But they may have a resized one
+      val data2 = data1.marginProposal.filter(_ isRemoteMargined remoteLCSS).map(data.withMargin).getOrElse(data1) // or margin increased
       val weAreEven = localLCSS.remoteUpdates == remoteLCSS.localUpdates && localLCSS.localUpdates == remoteLCSS.remoteUpdates
       val weAreAhead = localLCSS.remoteUpdates > remoteLCSS.localUpdates || localLCSS.localUpdates > remoteLCSS.remoteUpdates
       val isLocalSigOk = remoteLCSS.verifyRemoteSig(kit.nodeParams.nodeId)
@@ -189,33 +192,33 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
       log.info(s"Got remote signed state with rate=${remoteLCSS.rate}, we expected ${localLCSS.rate}")
 
       if (!isRemoteSigOk) {
-        val (finalData, error) = withLocalError(data1, ErrorCodes.ERR_HOSTED_WRONG_REMOTE_SIG)
+        val (finalData, error) = withLocalError(data2, ErrorCodes.ERR_HOSTED_WRONG_REMOTE_SIG)
         goto(CLOSED) StoringAndUsing finalData SendingHasChannelId error
       } else if (!isLocalSigOk) {
-        val (finalData, error) = withLocalError(data1, ErrorCodes.ERR_HOSTED_WRONG_LOCAL_SIG)
+        val (finalData, error) = withLocalError(data2, ErrorCodes.ERR_HOSTED_WRONG_LOCAL_SIG)
         goto(CLOSED) StoringAndUsing finalData SendingHasChannelId error
       } else if (weAreEven || weAreAhead) {
-        val retransmit = Vector(localLCSS) ++ data1.resizeProposal
-        val finalData = data1.copy(commitments = data1.commitments.copy(nextRemoteUpdates = Nil), overrideProposal = None)
-        goto(NORMAL) using finalData SendingManyHosted retransmit SendingManyHasChannelId data1.commitments.nextLocalUpdates Receiving CMD_SIGN(None)
+        val retransmit = Vector(localLCSS) ++ data2.resizeProposal ++ data2.marginProposal
+        val finalData = data2.copy(commitments = data2.commitments.copy(nextRemoteUpdates = Nil), overrideProposal = None)
+        goto(NORMAL) using finalData SendingManyHosted retransmit SendingManyHasChannelId data2.commitments.nextLocalUpdates Receiving CMD_SIGN(None)
       } else {
         val localUpdatesAcked = remoteLCSS.remoteUpdates - localLCSS.localUpdates
         val remoteUpdatesAcked = remoteLCSS.localUpdates - localLCSS.remoteUpdates
 
-        val remoteUpdatesAccountedByLocal = data1.commitments.nextRemoteUpdates take remoteUpdatesAcked.toInt
-        val localUpdatesAccountedByRemote = data1.commitments.nextLocalUpdates take localUpdatesAcked.toInt
-        val localUpdatesLeftover = data1.commitments.nextLocalUpdates drop localUpdatesAcked.toInt
+        val remoteUpdatesAccountedByLocal = data2.commitments.nextRemoteUpdates take remoteUpdatesAcked.toInt
+        val localUpdatesAccountedByRemote = data2.commitments.nextLocalUpdates take localUpdatesAcked.toInt
+        val localUpdatesLeftover = data2.commitments.nextLocalUpdates drop localUpdatesAcked.toInt
 
-        val commits1 = data1.commitments.copy(nextLocalUpdates = localUpdatesAccountedByRemote, nextRemoteUpdates = remoteUpdatesAccountedByLocal)
+        val commits1 = data2.commitments.copy(nextLocalUpdates = localUpdatesAccountedByRemote, nextRemoteUpdates = remoteUpdatesAccountedByLocal)
         val restoredLCSS = commits1.nextLocalUnsignedLCSS(remoteLCSS.blockDay).copy(localSigOfRemote = remoteLCSS.remoteSigOfLocal, remoteSigOfLocal = remoteLCSS.localSigOfRemote)
 
         if (restoredLCSS.reverse == remoteLCSS) {
-          val retransmit = Vector(restoredLCSS) ++ data1.resizeProposal
+          val retransmit = Vector(restoredLCSS) ++ data2.resizeProposal ++ data2.marginProposal
           val restoredCommits = clearOrigin(commits1.copy(lastCrossSignedState = restoredLCSS, localSpec = commits1.nextLocalSpec, nextLocalUpdates = localUpdatesLeftover, nextRemoteUpdates = Nil), data1.commitments)
-          goto(NORMAL) StoringAndUsing data1.copy(commitments = restoredCommits) RelayingRemoteUpdates commits1 SendingManyHosted retransmit SendingManyHasChannelId localUpdatesLeftover Receiving CMD_SIGN(None)
+          goto(NORMAL) StoringAndUsing data2.copy(commitments = restoredCommits) RelayingRemoteUpdates commits1 SendingManyHosted retransmit SendingManyHasChannelId localUpdatesLeftover Receiving CMD_SIGN(None)
         } else {
-          val (data2, error) = withLocalError(data1, ErrorCodes.ERR_MISSING_CHANNEL)
-          goto(CLOSED) StoringAndUsing data2 SendingHasChannelId error
+          val (data3, error) = withLocalError(data2, ErrorCodes.ERR_MISSING_CHANNEL)
+          goto(CLOSED) StoringAndUsing data3 SendingHasChannelId error
         }
       }
   }
@@ -293,11 +296,11 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
 
     case Event(fail: UpdateFailMalformedHtlc, data: HC_DATA_ESTABLISHED) => processRemoteResolve(data.commitments.receiveFailMalformed(fail), data)
 
-    case Event(_: CMD_SIGN, data: HC_DATA_ESTABLISHED) if data.commitments.nextLocalUpdates.nonEmpty || data.resizeProposal.isDefined =>
+    case Event(_: CMD_SIGN, data: HC_DATA_ESTABLISHED) if data.commitments.nextLocalUpdates.nonEmpty || data.resizeProposal.isDefined || data.marginProposal.isDefined =>
       val oracleRate = RateOracle.getCurrentRate()
       log.info(s"Current oracle rate is ${oracleRate}")
       val newRate = if (oracleRate == 0.msat) data.commitments.lastCrossSignedState.rate else oracleRate
-      val commitments = data.resizeProposal.map(data.withResize).getOrElse(data).commitments
+      val commitments = data.marginProposal.map(data.withMargin).getOrElse(data.resizeProposal.map(data.withResize).getOrElse(data)).commitments
       val nextLocalLCSS = commitments.nextLocalUnsignedLCSSWithRate(log, currentBlockDay, newRate)
       if (commitments.validateFiatSpend(newRate)) {
         log.info(s"Next lastOracleState: ${Some(nextLocalLCSS.rate)}")
@@ -369,6 +372,8 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
 
   whenUnhandled {
     case Event(resize: ResizeChannel, data: HC_DATA_ESTABLISHED) if data.commitments.lastCrossSignedState.isHost => processResizeProposal(goto(CLOSED), resize, data)
+
+    case Event(margin: MarginChannel, data: HC_DATA_ESTABLISHED) if data.commitments.lastCrossSignedState.isHost => processMarginProposal(goto(CLOSED), margin, data)
 
     case Event(cmd: CurrentBlockCount, data: HC_DATA_ESTABLISHED) => processBlockCount(goto(CLOSED), cmd.blockCount, data)
 
@@ -454,7 +459,23 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
       else if (data.commitments.lastCrossSignedState.isHost) stay replying CMDResFailure("Resizing declined: only client can initiate resizing")
       else if (data.commitments.capacity > msg.newCapacity) stay replying CMDResFailure("Resizing declined: new capacity must be larger than current capacity")
       else if (cfg.vals.phcConfig.maxCapacity < msg.newCapacity) stay replying CMDResFailure("Resizing declined: new capacity must not exceed max allowed capacity")
-      else stay StoringAndUsing data.copy(resizeProposal = Some(msg), overrideProposal = None) SendingHosted msg replying CMDResSuccess(cmd) Receiving CMD_SIGN(None)
+      else stay StoringAndUsing data.copy(resizeProposal = Some(msg), marginProposal = None, overrideProposal = None) SendingHosted msg replying CMDResSuccess(cmd) Receiving CMD_SIGN(None)
+
+    case Event(cmd: HC_CMD_MARGIN, data: HC_DATA_ESTABLISHED) =>
+      val currentRate = RateOracle.getCurrentRate()
+      val nextMargin = data.commitments.nextFiatMargin(currentRate)
+      val nextMarginInc = MilliSatoshi((1.2 * nextMargin.toLong.toDouble).round)
+      val maxCapacity = cfg.vals.phcConfig.maxCapacity
+      val maxCapacityInc = MilliSatoshi(10 * maxCapacity.toLong)
+      val msg = MarginChannel(cmd.newCapacity, cmd.newBalance).sign(kit.nodeParams.privateKey)
+      if (data.errorExt.nonEmpty) stay replying CMDResFailure("Margining declined: channel is in error state")
+      else if (data.marginProposal.nonEmpty) stay replying CMDResFailure("Margining declined: channel is already being margined")
+      else if (data.commitments.lastCrossSignedState.isHost) stay replying CMDResFailure("Margining declined: only client can initiate margin increase")
+      else if (data.commitments.capacity > msg.newCapacity) stay replying CMDResFailure("Margining declined: new capacity must be larger than current capacity")
+      else if (data.commitments.localSpec.toLocal > msg.newBalance) stay replying CMDResFailure("Margining declined: new balance must be larger than old balance")
+      else if (nextMarginInc < msg.newBalance) stay replying CMDResFailure("Margining declined: new balance must be less than current fiat balance")
+      else if (maxCapacityInc < msg.newCapacity) stay replying CMDResFailure("Margining declined: new capacity must not exceed max allowed capacity")
+      else stay StoringAndUsing data.copy(marginProposal = Some(msg), resizeProposal = None, overrideProposal = None) SendingHosted msg replying CMDResSuccess(cmd) Receiving CMD_SIGN(None)
 
     case _ =>
       stay
@@ -701,7 +722,42 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
       errorState StoringAndUsing data1 SendingHasChannelId error
     } else {
       log.info(s"PLGN FC, channel resize successfully accepted, peer=$remoteNodeId")
-      stay StoringAndUsing data.copy(resizeProposal = Some(resize), overrideProposal = None)
+      stay StoringAndUsing data.copy(resizeProposal = Some(resize), marginProposal = None, overrideProposal = None)
+    }
+  }
+
+  def processMarginProposal(errorState: FsmStateExt, margin: MarginChannel, data: HC_DATA_ESTABLISHED): HostedFsmState = {
+    val isSignatureFine = margin.verifyClientSig(remoteNodeId)
+    val currentRate = RateOracle.getCurrentRate()
+    log.info(s"PLGN FC, margin proposal, current oracle rate=$currentRate, peer=$remoteNodeId")
+    val nextMargin = data.commitments.nextFiatMargin(currentRate)
+    val nextMarginInc = MilliSatoshi((1.2 * nextMargin.toLong.toDouble).round) // allow 20% bigger
+    val maxCapacity = cfg.vals.phcConfig.maxCapacity
+    val maxCapacityInc = MilliSatoshi(10 * maxCapacity.toLong)
+
+    if (margin.newCapacity < data.commitments.capacity) {
+      log.info(s"PLGN FC, margin check fail, new capacity is less than current one, peer=$remoteNodeId")
+      val (data1, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_INVALID_MARGIN)
+      errorState StoringAndUsing data1 SendingHasChannelId error
+    } else if (maxCapacityInc < margin.newCapacity) {
+      log.info(s"PLGN FC, margin check fail, new capacity is more than 10 * max allowed one, peer=$remoteNodeId")
+      val (data1, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_INVALID_MARGIN)
+      errorState StoringAndUsing data1 SendingHasChannelId error
+    } else if (data.commitments.localSpec.toRemote > margin.newBalance) {
+      log.info(s"PLGN FC, margin check fail, new remote balance=${margin.newBalance} is less than old balance=${data.commitments.localSpec.toRemote}, peer=$remoteNodeId")
+      val (data1, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_INVALID_MARGIN)
+      errorState StoringAndUsing data1 SendingHasChannelId error
+    } else if (!isSignatureFine) {
+      log.info(s"PLGN FC, margin signature check fail, peer=$remoteNodeId")
+      val (data1, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_INVALID_MARGIN)
+      errorState StoringAndUsing data1 SendingHasChannelId error
+    } else if (margin.newBalance.toMilliSatoshi > nextMarginInc) {
+      log.info(s"PLGN FC, margin requested to high margin, margin=$margin.newBalance, expectedMargin=$nextMargin, peer=$remoteNodeId")
+      val (data1, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_INVALID_MARGIN)
+      errorState StoringAndUsing data1 SendingHasChannelId error
+    } else {
+      log.info(s"PLGN FC, channel margin successfully accepted, peer=$remoteNodeId")
+      stay StoringAndUsing data.copy(marginProposal = Some(margin), resizeProposal = None, overrideProposal = None)
     }
   }
 
@@ -723,11 +779,14 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
       // Persist unsigned remote updates to use them on re-sync
       stay StoringAndUsing data Receiving CMD_SIGN(None)
     } else if (!isRemoteSigOk) {
-      data.resizeProposal.map(data.withResize) match {
+      data.marginProposal.map(data.withMargin) match {
         case Some(data1) => attemptStateUpdate(remoteSU, data1)
-        case None =>
-          val (data1, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_WRONG_REMOTE_SIG)
-          goto(CLOSED) StoringAndUsing data1 SendingHasChannelId error
+        case None => data.resizeProposal.map(data.withResize) match {
+          case Some(data1) => attemptStateUpdate(remoteSU, data1)
+          case None =>
+            val (data1, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_WRONG_REMOTE_SIG)
+            goto(CLOSED) StoringAndUsing data1 SendingHasChannelId error
+        }
       }
     } else {
       val commitments1 = clearOrigin(commits1, data.commitments)

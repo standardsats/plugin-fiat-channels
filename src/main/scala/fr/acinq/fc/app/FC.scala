@@ -81,10 +81,12 @@ object FC {
 
   final val HC_ERROR_TAG = 53497
 
+  final val HC_MARGIN_CHANNEL_TAG = 53495
+
   val hostedMessageTags: Set[Int] =
     Set(HC_INVOKE_HOSTED_CHANNEL_TAG, HC_INIT_HOSTED_CHANNEL_TAG, HC_LAST_CROSS_SIGNED_STATE_TAG, HC_STATE_UPDATE_TAG,
       HC_STATE_OVERRIDE_TAG, HC_HOSTED_CHANNEL_BRANDING_TAG, HC_ANNOUNCEMENT_SIGNATURE_TAG, HC_RESIZE_CHANNEL_TAG,
-      HC_ASK_BRANDING_INFO, HC_QUERY_RATE_TAG, HC_REPLY_RATE_TAG)
+      HC_MARGIN_CHANNEL_TAG, HC_ASK_BRANDING_INFO, HC_QUERY_RATE_TAG, HC_REPLY_RATE_TAG)
 
   val preimageQueryTags: Set[Int] = Set(HC_QUERY_PREIMAGES_TAG, HC_REPLY_PREIMAGES_TAG)
 
@@ -217,6 +219,12 @@ class FC extends Plugin with RouteProvider {
       }
     }
 
+    val margin: Route = postRequest("hc-margin") { implicit t =>
+      formFields("newCapacitySat".as[Satoshi], "newBalance".as[Satoshi], nodeIdFormParam) { case (newCapacity, newBalance, remoteNodeId) =>
+        completeCommand(HC_CMD_MARGIN(remoteNodeId, newCapacity, newBalance))
+      }
+    }
+
     val suspend: Route = postRequest("hc-suspend") { implicit t =>
       formFields(nodeIdFormParam) { remoteNodeId =>
         completeCommand(HC_CMD_SUSPEND(remoteNodeId))
@@ -264,7 +272,7 @@ class FC extends Plugin with RouteProvider {
     }
 
     invoke ~ externalFulfill ~ findByRemoteId ~ overridePropose ~ overrideAccept ~ makePublic ~ makePrivate ~
-      resize ~ suspend ~ verifyRemoteState ~ restoreFromRemoteState ~ broadcastPreimages ~ phcNodes ~ hotChannels
+      resize ~ margin ~ suspend ~ verifyRemoteState ~ restoreFromRemoteState ~ broadcastPreimages ~ phcNodes ~ hotChannels
   }
 }
 

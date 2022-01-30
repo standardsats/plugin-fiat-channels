@@ -40,6 +40,9 @@ case class HC_CMD_PRIVATE(remoteNodeId: PublicKey) extends HasRemoteNodeIdHosted
 
 case class HC_CMD_RESIZE(remoteNodeId: PublicKey, newCapacity: Satoshi) extends HasRemoteNodeIdHostedCommand
 
+// Increase balance and capacity to match fiat balance
+case class HC_CMD_MARGIN(remoteNodeId: PublicKey, newCapacity: Satoshi, newBalance: Satoshi) extends HasRemoteNodeIdHostedCommand
+
 case class HC_CMD_RESTORE(remoteNodeId: PublicKey, remoteData: HostedState) extends HasRemoteNodeIdHostedCommand
 
 case class HC_CMD_GET_INFO(remoteNodeId: PublicKey) extends HasRemoteNodeIdHostedCommand
@@ -70,6 +73,7 @@ case class HC_DATA_ESTABLISHED(commitments: HostedCommitments,
                                channelUpdate: ChannelUpdate,
                                localErrors: List[ErrorExt] = Nil, remoteError: Option[ErrorExt] = None,
                                resizeProposal: Option[ResizeChannel] = None, overrideProposal: Option[StateOverride] = None,
+                               marginProposal: Option[MarginChannel] = None,
                                channelAnnouncement: Option[ChannelAnnouncement] = None, lastOracleState: Option[MilliSatoshi] = None
                               ) extends HostedData { me =>
 
@@ -99,6 +103,15 @@ case class HC_DATA_ESTABLISHED(commitments: HostedCommitments,
       .modify(_.commitments.localSpec.toRemote).usingIf(!commitments.lastCrossSignedState.isHost)(_ + resize.newCapacity - commitments.capacity)
       .modify(_.commitments.localSpec.toLocal).usingIf(commitments.lastCrossSignedState.isHost)(_ + resize.newCapacity - commitments.capacity)
       .modify(_.resizeProposal).setTo(None)
+
+  def withMargin(margin: MarginChannel): HC_DATA_ESTABLISHED =
+    me.modify(_.commitments.lastCrossSignedState.initHostedChannel.maxHtlcValueInFlightMsat).setTo(margin.newCapacityMsatU64)
+      .modify(_.commitments.lastCrossSignedState.initHostedChannel.channelCapacityMsat).setTo(margin.newCapacity.toMilliSatoshi)
+      .modify(_.commitments.localSpec.toRemote).usingIf(!commitments.lastCrossSignedState.isHost)(_ + margin.newCapacity - commitments.capacity)
+      .modify(_.commitments.localSpec.toRemote).usingIf(commitments.lastCrossSignedState.isHost)(_ => margin.newBalance.toMilliSatoshi)
+      .modify(_.commitments.localSpec.toLocal).usingIf(commitments.lastCrossSignedState.isHost)(_ + margin.newCapacity - commitments.capacity)
+      .modify(_.commitments.localSpec.toLocal).usingIf(!commitments.lastCrossSignedState.isHost)(_ => margin.newBalance.toMilliSatoshi)
+      .modify(_.marginProposal).setTo(None)
 }
 
 case class HostedCommitments(localNodeId: PublicKey, remoteNodeId: PublicKey, channelId: ByteVector32,
@@ -177,6 +190,13 @@ case class HostedCommitments(localNodeId: PublicKey, remoteNodeId: PublicKey, ch
     val d2 = s2 - s1
     // Either we increasing fiat balance or cannot spend it more than old fiat balance was
     d2 >= 0 || d2 * f2 < s1 * f1
+  }
+
+  def nextFiatMargin(newRate: MilliSatoshi) : MilliSatoshi = {
+    val price = 1.0 / newRate.toLong.toDouble
+    val capacity = lastCrossSignedState.initHostedChannel.channelCapacityMsat
+    val s = (capacity - lastCrossSignedState.localBalanceMsat).toLong.toDouble
+    MilliSatoshi((price * s).round)
   }
 
   def nextLocalUnsignedLCSS(blockDay: Long): LastCrossSignedState = {

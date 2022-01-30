@@ -77,6 +77,12 @@ object HCProtocolCodecs {
       (bytes64 withContext "clientSig")
   }.as[ResizeChannel]
 
+  val marginChannelCodec = {
+    (satoshi withContext "newCapacity") ::
+    (satoshi withContext "newBalance") ::
+      (bytes64 withContext "clientSig")
+  }.as[MarginChannel]
+
   val askBrandingInfoCodec = (bytes32 withContext "chainHash").as[AskBrandingInfo]
 
   val queryPublicHostedChannelsCodec = (bytes32 withContext "chainHash").as[QueryPublicHostedChannels]
@@ -98,6 +104,7 @@ object HCProtocolCodecs {
       case HC_STATE_UPDATE_TAG => stateUpdateCodec.decode(bitVector)
       case HC_STATE_OVERRIDE_TAG => stateOverrideCodec.decode(bitVector)
       case HC_RESIZE_CHANNEL_TAG => resizeChannelCodec.decode(bitVector)
+      case HC_MARGIN_CHANNEL_TAG => marginChannelCodec.decode(bitVector)
       case HC_ASK_BRANDING_INFO => askBrandingInfoCodec.decode(bitVector)
       case HC_INIT_HOSTED_CHANNEL_TAG => initHostedChannelCodec.decode(bitVector)
       case HC_INVOKE_HOSTED_CHANNEL_TAG => invokeHostedChannelCodec.decode(bitVector)
@@ -119,6 +126,7 @@ object HCProtocolCodecs {
     case msg: StateUpdate => UnknownMessage(HC_STATE_UPDATE_TAG, stateUpdateCodec.encode(msg).require.toByteVector)
     case msg: StateOverride => UnknownMessage(HC_STATE_OVERRIDE_TAG, stateOverrideCodec.encode(msg).require.toByteVector)
     case msg: ResizeChannel => UnknownMessage(HC_RESIZE_CHANNEL_TAG, resizeChannelCodec.encode(msg).require.toByteVector)
+    case msg: MarginChannel => UnknownMessage(HC_MARGIN_CHANNEL_TAG, marginChannelCodec.encode(msg).require.toByteVector)
     case msg: AskBrandingInfo => UnknownMessage(HC_ASK_BRANDING_INFO, askBrandingInfoCodec.encode(msg).require.toByteVector)
     case msg: InitHostedChannel => UnknownMessage(HC_INIT_HOSTED_CHANNEL_TAG, initHostedChannelCodec.encode(msg).require.toByteVector)
     case msg: InvokeHostedChannel => UnknownMessage(HC_INVOKE_HOSTED_CHANNEL_TAG, invokeHostedChannelCodec.encode(msg).require.toByteVector)
