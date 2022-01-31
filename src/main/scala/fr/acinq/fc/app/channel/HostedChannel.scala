@@ -478,17 +478,16 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
     case Event(cmd: HC_CMD_MARGIN, data: HC_DATA_ESTABLISHED) =>
       RateOracle.getCurrentRate() match {
         case Some(currentRate) =>
-          val nextMargin = data.commitments.nextFiatMargin(currentRate)
-          val nextMarginInc = MilliSatoshi((1.2 * nextMargin.toLong.toDouble).round)
+          val nextMargin = data.commitments.nextMaxFiatMargin(currentRate)
           val maxCapacity = cfg.vals.phcConfig.maxCapacity
-          val maxCapacityInc = MilliSatoshi(10 * maxCapacity.toLong)
+          val maxCapacityInc = MilliSatoshi(HostedCommitments.marginMaxCapacityFactor * maxCapacity.toLong)
           val msg = MarginChannel(cmd.newCapacity, cmd.newBalance).sign(kit.nodeParams.privateKey)
           if (data.errorExt.nonEmpty) stay replying CMDResFailure("Margining declined: channel is in error state")
           else if (data.marginProposal.nonEmpty) stay replying CMDResFailure("Margining declined: channel is already being margined")
           else if (data.commitments.lastCrossSignedState.isHost) stay replying CMDResFailure("Margining declined: only client can initiate margin increase")
           else if (data.commitments.capacity > msg.newCapacity) stay replying CMDResFailure("Margining declined: new capacity must be larger than current capacity")
           else if (data.commitments.localSpec.toLocal > msg.newBalance) stay replying CMDResFailure("Margining declined: new balance must be larger than old balance")
-          else if (nextMarginInc < msg.newBalance) stay replying CMDResFailure("Margining declined: new balance must be less than current fiat balance")
+          else if (nextMargin < msg.newBalance) stay replying CMDResFailure("Margining declined: new balance must be less than current fiat balance")
           else if (maxCapacityInc < msg.newCapacity) stay replying CMDResFailure("Margining declined: new capacity must not exceed max allowed capacity")
           else stay StoringAndUsing data.copy(marginProposal = Some(msg), resizeProposal = None, overrideProposal = None) SendingHosted msg replying CMDResSuccess(cmd) Receiving CMD_SIGN(None)
 
@@ -750,10 +749,9 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
       case Some(currentRate) =>
         val isSignatureFine = margin.verifyClientSig(remoteNodeId)
         log.info(s"PLGN FC, margin proposal, current oracle rate=$currentRate, peer=$remoteNodeId")
-        val nextMargin = data.commitments.nextFiatMargin(currentRate)
-        val nextMarginInc = MilliSatoshi((1.2 * nextMargin.toLong.toDouble).round) // allow 20% bigger
+        val nextMargin = data.commitments.nextMaxFiatMargin(currentRate)
         val maxCapacity = cfg.vals.phcConfig.maxCapacity
-        val maxCapacityInc = MilliSatoshi(10 * maxCapacity.toLong)
+        val maxCapacityInc = MilliSatoshi(HostedCommitments.marginMaxCapacityFactor * maxCapacity.toLong)
 
         if (margin.newCapacity < data.commitments.capacity) {
           log.info(s"PLGN FC, margin check fail, new capacity is less than current one, peer=$remoteNodeId")
@@ -771,7 +769,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
           log.info(s"PLGN FC, margin signature check fail, peer=$remoteNodeId")
           val (data1, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_INVALID_MARGIN)
           errorState StoringAndUsing data1 SendingHasChannelId error
-        } else if (margin.newBalance.toMilliSatoshi > nextMarginInc) {
+        } else if (margin.newBalance.toMilliSatoshi > nextMargin) {
           log.info(s"PLGN FC, margin requested to high margin, margin=$margin.newBalance, expectedMargin=$nextMargin, peer=$remoteNodeId")
           val (data1, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_INVALID_MARGIN)
           errorState StoringAndUsing data1 SendingHasChannelId error

@@ -114,6 +114,13 @@ case class HC_DATA_ESTABLISHED(commitments: HostedCommitments,
       .modify(_.marginProposal).setTo(None)
 }
 
+object HostedCommitments {
+  /// How much sats we should have in the channel to cover sharp price movements
+  val marginReserveFactor: Double = 1.3
+  /// Defines a increase value for the channel capacity if we trying to increase it due the margin request above maximum allowed capacity
+  val marginMaxCapacityFactor: Int = 10
+}
+
 case class HostedCommitments(localNodeId: PublicKey, remoteNodeId: PublicKey, channelId: ByteVector32,
                              localSpec: CommitmentSpec, originChannels: Map[Long, Origin], lastCrossSignedState: LastCrossSignedState,
                              nextLocalUpdates: List[UpdateMessage with HasChannelId], nextRemoteUpdates: List[UpdateMessage with HasChannelId],
@@ -130,6 +137,10 @@ case class HostedCommitments(localNodeId: PublicKey, remoteNodeId: PublicKey, ch
   val availableBalanceForReceive: MilliSatoshi = nextLocalSpec.toRemote
 
   val capacity: Satoshi = lastCrossSignedState.initHostedChannel.channelCapacityMsat.truncateToSatoshi
+
+  lazy val reserveSats: MilliSatoshi = lastCrossSignedState.initHostedChannel.channelCapacityMsat - nextLocalSpec.toLocal
+
+  lazy val fiatValue: Double = reserveSats.toLong.toDouble / lastCrossSignedState.rate.toLong.toDouble
 
   def pendingOutgoingFulfills: Seq[UpdateFulfillHtlc] = nextLocalUpdates.collect { case fulfill: UpdateFulfillHtlc => fulfill }
 
@@ -193,10 +204,11 @@ case class HostedCommitments(localNodeId: PublicKey, remoteNodeId: PublicKey, ch
   }
 
   def nextFiatMargin(newRate: MilliSatoshi) : MilliSatoshi = {
-    val price = 1.0 / newRate.toLong.toDouble
-    val capacity = lastCrossSignedState.initHostedChannel.channelCapacityMsat
-    val s = (capacity - lastCrossSignedState.localBalanceMsat).toLong.toDouble
-    MilliSatoshi((price * s).round)
+    MilliSatoshi((fiatValue * newRate.toLong.toDouble).round)
+  }
+
+  def nextMaxFiatMargin(newRate: MilliSatoshi) : MilliSatoshi = {
+    MilliSatoshi((HostedCommitments.marginReserveFactor * fiatValue * newRate.toLong.toDouble).round)
   }
 
   def nextLocalUnsignedLCSS(blockDay: Long): LastCrossSignedState = {
