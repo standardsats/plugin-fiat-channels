@@ -327,9 +327,8 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
       RateOracle.getCurrentRate() match {
         case Some(oracleRate) => stay SendingHosted ReplyCurrentRate(oracleRate)
         case None =>
-          log.error("Oracle price is not defined, not signing new state")
-          val (finalData, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_INVALID_ORACLE_PRICE)
-          goto(CLOSED) StoringAndUsing finalData SendingHasChannelId error
+          log.error("Oracle price is not defined, not sending it to the client yet")
+          stay
       }
   }
 
