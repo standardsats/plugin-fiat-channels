@@ -14,12 +14,12 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 object RateOracle {
   case object TickUpdateRate { val label = "TickUpdateRate" }
 
-  var lastRate: MilliSatoshi = 0L.msat
+  var lastRate: Option[MilliSatoshi] = None
   val rateLock = new ReentrantReadWriteLock()
   val rateWrite = rateLock.writeLock()
   val rateRead = rateLock.readLock()
 
-  def getCurrentRate(): MilliSatoshi = {
+  def getCurrentRate(): Option[MilliSatoshi] = {
     try {
       rateRead.lock()
       lastRate
@@ -39,7 +39,7 @@ class RateOracle(kit: eclair.Kit, source: RateSource) extends Actor with Logging
       logger.info("Got response, rate: " + rate + " EUR/BTC")
       try {
         RateOracle.rateWrite.lock()
-        RateOracle.lastRate = (math round (100_000_000_000L.toDouble / rate)).msat
+        RateOracle.lastRate = Some((math round (100_000_000_000L.toDouble / rate)).msat)
       } finally RateOracle.rateWrite.unlock()
 
     case Status.Failure(e) =>
