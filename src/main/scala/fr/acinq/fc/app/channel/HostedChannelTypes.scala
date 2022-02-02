@@ -7,11 +7,15 @@ import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey}
 import fr.acinq.bitcoin.{ByteVector32, ByteVector64, Crypto, Satoshi, SatoshiLong}
 import fr.acinq.eclair._
 import fr.acinq.eclair.channel._
-import fr.acinq.eclair.payment.OutgoingPacket
+import fr.acinq.eclair.blockchain.CurrentBlockHeight
+import fr.acinq.eclair.payment.OutgoingPaymentPacket
 import fr.acinq.eclair.transactions.{CommitmentSpec, DirectedHtlc}
 import fr.acinq.eclair.wire.protocol._
 import fr.acinq.fc.app._
+import fr.acinq.fc.app.network.PHC
 import scodec.bits.ByteVector
+
+import scala.concurrent.duration._
 
 import scala.language.postfixOps
 
@@ -88,6 +92,10 @@ case class HC_DATA_ESTABLISHED(commitments: HostedCommitments,
     // but pending HTLCs can be cleared by our fake FAIL on timeout or by peer's FULFILL
     commitments.nextLocalSpec.htlcs
   }
+
+  def shouldRebroadcastAnnounce: Boolean = channelUpdate.timestamp.toLong < System.currentTimeMillis.millis.toSeconds - PHC.reAnnounceThreshold
+
+  def shouldBroadcastUpdateRightAway: Boolean = channelUpdate.timestamp.toLong < System.currentTimeMillis.millis.toSeconds - PHC.tickAnnounceThreshold.toSeconds
 
   def isResizeSupported: Boolean = commitments.lastCrossSignedState.initHostedChannel.features.contains(ResizeableFCFeature.mandatory)
 
@@ -219,15 +227,15 @@ case class HostedCommitments(localNodeId: PublicKey, remoteNodeId: PublicKey, ch
       localSigOfRemote = ByteVector64.Zeroes, remoteSigOfLocal = ByteVector64.Zeroes)
   }
 
-  def sendAdd(cmd: CMD_ADD_HTLC, blockHeight: Long): Either[ChannelException, (HostedCommitments, UpdateAddHtlc)] = {
+  def sendAdd(cmd: CMD_ADD_HTLC, blockHeight: BlockHeight): Either[ChannelException, (HostedCommitments, UpdateAddHtlc)] = {
     val minExpiry = Channel.MIN_CLTV_EXPIRY_DELTA.toCltvExpiry(blockHeight)
     if (cmd.cltvExpiry < minExpiry) {
-      return Left(ExpiryTooSmall(channelId, minimum = minExpiry, actual = cmd.cltvExpiry, blockCount = blockHeight))
+      return Left(ExpiryTooSmall(channelId, minimum = minExpiry, actual = cmd.cltvExpiry, blockHeight = blockHeight))
     }
 
     val maxExpiry = Channel.MAX_CLTV_EXPIRY_DELTA.toCltvExpiry(blockHeight)
     if (cmd.cltvExpiry >= maxExpiry) {
-      return Left(ExpiryTooBig(channelId, maximum = maxExpiry, actual = cmd.cltvExpiry, blockCount = blockHeight))
+      return Left(ExpiryTooBig(channelId, maximum = maxExpiry, actual = cmd.cltvExpiry, blockHeight = blockHeight))
     }
 
     if (cmd.amount < lastCrossSignedState.initHostedChannel.htlcMinimumMsat) {
@@ -305,7 +313,7 @@ case class HostedCommitments(localNodeId: PublicKey, remoteNodeId: PublicKey, ch
 
   def sendFail(cmd: CMD_FAIL_HTLC, nodeSecret: PrivateKey): Either[ChannelException, (HostedCommitments, UpdateFailHtlc)] =
     getIncomingHtlcCrossSigned(cmd.id) match {
-      case Some(add) => OutgoingPacket.buildHtlcFailure(nodeSecret, cmd, add).map(updateFail => (addLocalProposal(updateFail), updateFail))
+      case Some(add) => OutgoingPaymentPacket.buildHtlcFailure(nodeSecret, cmd, add).map(updateFail => (addLocalProposal(updateFail), updateFail))
       case None => Left(UnknownHtlcId(channelId, cmd.id))
     }
 

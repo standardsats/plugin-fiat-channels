@@ -4,7 +4,7 @@ import com.typesafe.config.{ConfigFactory, Config => TypesafeConfig}
 import fr.acinq.bitcoin.Crypto.PublicKey
 import fr.acinq.bitcoin.{ByteVector32, Crypto, LexicographicalOrdering, Protocol}
 import fr.acinq.eclair._
-import fr.acinq.eclair.channel.Channel.OutgoingMessage
+import fr.acinq.eclair.io.Peer.OutgoingMessage
 import fr.acinq.eclair.io.PeerConnected
 import fr.acinq.eclair.router.Announcements
 import fr.acinq.eclair.wire.internal.channel.version3.HCProtocolCodecs
@@ -104,6 +104,8 @@ class Config(datadir: File) {
 
 
 case class FCParams(feeBaseMsat: Long, feeProportionalMillionths: Long, cltvDeltaBlocks: Int, channelCapacityMsat: Long, htlcMinimumMsat: Long, maxAcceptedHtlcs: Int, isResizable: Boolean) {
+  def lastUpdateDiffers(u: ChannelUpdate): Boolean = u.cltvExpiryDelta.toInt != cltvDeltaBlocks || u.htlcMinimumMsat != htlcMinimum || u.feeBaseMsat != feeBase || u.feeProportionalMillionths != feeProportionalMillionths
+
   def initMsg(rate: MilliSatoshi): InitHostedChannel = InitHostedChannel(UInt64(channelCapacityMsat), htlcMinimum, maxAcceptedHtlcs, channelCapacityMsat.msat, initialClientBalanceMsat = 0L.msat, initialRate = rate, channelFeatures)
 
   lazy val channelFeatures: List[Int] = if (isResizable) List(FCFeature.mandatory, ResizeableFCFeature.mandatory) else List(FCFeature.mandatory)

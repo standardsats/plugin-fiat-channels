@@ -39,11 +39,11 @@ object HostedWireSpec {
 
   val invoke_hosted_channel: InvokeHostedChannel = InvokeHostedChannel(Block.LivenetGenesisBlock.hash, ByteVector.fromValidHex("00" * 32), secret = ByteVector.fromValidHex("00" * 32))
 
-  val init_hosted_channel: InitHostedChannel = InitHostedChannel(UInt64(6), 10.msat, 20, 500000000L.msat, 1000000.msat, List(FCFeature.mandatory, ResizeableFCFeature.mandatory))
+  val init_hosted_channel: InitHostedChannel = InitHostedChannel(UInt64(6), 10.msat, 20, 500000000L.msat, 1000000.msat, 1.msat, List(FCFeature.mandatory, ResizeableFCFeature.mandatory))
 
-  val state_update: StateUpdate = StateUpdate(blockDay = 20020L, localUpdates = 1202L, remoteUpdates = 10L, ByteVector64.Zeroes)
+  val state_update: StateUpdate = StateUpdate(blockDay = 20020L, localUpdates = 1202L, remoteUpdates = 10L, 1.msat, ByteVector64.Zeroes)
 
-  val last_cross_signed_state_1: LastCrossSignedState = LastCrossSignedState(isHost = true, bin(47, 0), init_hosted_channel, 10000, 10000.msat, 20000.msat, 10, 20,
+  val last_cross_signed_state_1: LastCrossSignedState = LastCrossSignedState(isHost = true, bin(47, 0), init_hosted_channel, 10000, 10000.msat, 20000.msat, 1.msat, 10, 20,
     List(add2, add1), List(add1, add2), ByteVector64.Zeroes, ByteVector64.Zeroes)
 
   val htlc1: IncomingHtlc = IncomingHtlc(add1)

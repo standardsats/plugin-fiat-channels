@@ -56,6 +56,22 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, r
 
   var clientChannelRemoteNodeIds: Set[PublicKey] = Set.empty
 
+  {
+    val hotChannels = channelsDb.listHotChannels
+    val clientChannels = channelsDb.listClientChannels
+
+    val hotNodeIds = hotChannels.map(_.commitments.remoteNodeId).mkString(", ")
+    val clientNodeIds = clientChannels.map(_.commitments.remoteNodeId).mkString(", ")
+    logger.info(s"PLGN PHC, in-memory NodeIds, hot=$hotNodeIds, client=$clientNodeIds")
+
+    clientChannelRemoteNodeIds ++= clientChannels.map(_.commitments.remoteNodeId)
+    (clientChannels ++ hotChannels).distinctBy(_.commitments.remoteNodeId).foreach(spawnPreparedChannel)
+
+    val nodeIdCheck = clientChannels.forall(_.commitments.localNodeId == kit.nodeParams.nodeId)
+    logger.info(s"PLGN PHC, all HCs have the same NodeId which matches current NodeId=$nodeIdCheck")
+    if (!nodeIdCheck) System.exit(0)
+  }
+
   override def receive: Receive = {
     case systemMessage: PeerConnected
       if systemMessage.connectionInfo.remoteInit.features.hasPluginFeature(FCFeature.plugin) =>
@@ -155,7 +171,7 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, r
           sockAddress <- nodeAnnouncement.addresses.headOption.map(_.socketAddress)
           hostAndPort = HostAndPort.fromParts(sockAddress.getHostString, sockAddress.getPort)
           _ = logger.info(s"PLGN FC, trying to reconnect to ${nodeAnnouncement.nodeId}/$hostAndPort")
-        } kit.switchboard ! Peer.Connect(address_opt = Some(hostAndPort), nodeId = nodeId)
+        } kit.switchboard ! Peer.Connect(NodeURI(nodeId, hostAndPort), self, isPersistent = false)
       }
   }
 

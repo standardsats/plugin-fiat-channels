@@ -6,7 +6,7 @@ import com.softwaremill.quicklens._
 import fr.acinq.bitcoin.Crypto.PublicKey
 import fr.acinq.bitcoin.{ByteVector32, ByteVector64, Crypto, SatoshiLong}
 import fr.acinq.eclair._
-import fr.acinq.eclair.blockchain.CurrentBlockCount
+import fr.acinq.eclair.blockchain.CurrentBlockHeight
 import fr.acinq.eclair.blockchain.fee.FeeratePerKw
 import fr.acinq.eclair.channel.Origin.LocalCold
 import fr.acinq.eclair.channel._
@@ -44,8 +44,8 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
   startTimerWithFixedDelay("SendAnnouncements", HostedChannel.SendAnnouncements(force = false), PHC.tickAnnounceThreshold)
 
   context.system.eventStream.subscribe(channel = classOf[PreimageBroadcastCatcher.BroadcastedPreimage], subscriber = self)
-
-  context.system.eventStream.subscribe(channel = classOf[CurrentBlockCount], subscriber = self)
+  context.system.eventStream.subscribe(channel = classOf[HostedSync.RouterIsOperational], subscriber = self)
+  context.system.eventStream.subscribe(channel = classOf[CurrentBlockHeight], subscriber = self)
 
   startWith(OFFLINE, HC_NOTHING)
 
@@ -81,7 +81,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
 
     case Event(margin: MarginChannel, data: HC_DATA_ESTABLISHED) if data.commitments.lastCrossSignedState.isHost => processMarginProposal(stay, margin, data)
 
-    case Event(cmd: CurrentBlockCount, data: HC_DATA_ESTABLISHED) => processBlockCount(stay, cmd.blockCount, data)
+    case Event(cmd: CurrentBlockHeight, data: HC_DATA_ESTABLISHED) => processBlockCount(stay, cmd.blockHeight.toLong, data)
 
     case Event(fulfill: UpdateFulfillHtlc, data: HC_DATA_ESTABLISHED) => processIncomingFulfill(stay, fulfill, data)
 
@@ -229,15 +229,19 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
 
     // PHC announcements
 
+    case Event(_: HostedSync.RouterIsOperational, data: HC_DATA_ESTABLISHED) if data.commitments.announceChannel =>
+      // PHC with remote peer may become NORMAL sooner than our PHC router becomes operational
+      manageUpdates(data)
+      stay
+
     case Event(HostedChannel.SendAnnouncements(force), data: HC_DATA_ESTABLISHED) if data.commitments.announceChannel =>
-      val lastUpdateTooLongAgo = force || data.channelUpdate.timestamp < System.currentTimeMillis.millis.toSeconds - PHC.reAnnounceThreshold
       val update1 = makeChannelUpdate(localLCSS = data.commitments.lastCrossSignedState, enable = true)
       context.system.eventStream publish makeLocalUpdateEvent(update1, data.commitments)
       val data1 = data.copy(channelUpdate = update1)
 
       data1.channelAnnouncement match {
         case None => stay StoringAndUsing data1 SendingHosted Tools.makePHCAnnouncementSignature(kit.nodeParams, data.commitments, shortChannelId, wantsReply = true)
-        case Some(announce) if lastUpdateTooLongAgo => stay StoringAndUsing data1 Announcing announce Announcing update1
+        case Some(announce) if force || data.shouldRebroadcastAnnounce => stay StoringAndUsing data1 Announcing announce Announcing update1
         case _ => stay StoringAndUsing data1 Announcing update1
       }
 
@@ -391,7 +395,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
 
     case Event(margin: MarginChannel, data: HC_DATA_ESTABLISHED) if data.commitments.lastCrossSignedState.isHost => processMarginProposal(goto(CLOSED), margin, data)
 
-    case Event(cmd: CurrentBlockCount, data: HC_DATA_ESTABLISHED) => processBlockCount(goto(CLOSED), cmd.blockCount, data)
+    case Event(cmd: CurrentBlockHeight, data: HC_DATA_ESTABLISHED) => processBlockCount(goto(CLOSED), cmd.blockHeight.toLong, data)
 
     case Event(fulfill: UpdateFulfillHtlc, data: HC_DATA_ESTABLISHED) => processIncomingFulfill(goto(CLOSED), fulfill, data)
 
@@ -426,7 +430,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
 
     case Event(cmd: CMD_ADD_HTLC, data: HC_DATA_ESTABLISHED) =>
       ackAddFail(cmd, ChannelUnavailable(channelId), data.channelUpdate)
-      log.info(s"PLGN FC, rejecting htlc in state=$stateName, peer=$remoteNodeId")
+      log.info(s"PLGN PHC, rejecting htlc in state=$stateName, peer=$remoteNodeId")
       stay
 
     // Scheduling override
@@ -498,6 +502,8 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
           stay replying CMDResFailure("Oracle rate is not defined")
       }
 
+    case Event(cmd: HasRemoteNodeIdHostedCommand, _) => stay replying CMDResFailure(s"Can not process cmd=${cmd.getClass.getName} in state=$stateName")
+
     case _ =>
       stay
   }
@@ -508,11 +514,12 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
 
       (connectionOpt, state, nextState, nextStateData) match {
         case (Some(connection), SYNCING | CLOSED, NORMAL, d1: HC_DATA_ESTABLISHED) =>
+          if (d1.commitments.announceChannel) manageUpdates(d1) else connection sendRoutingMsg d1.channelUpdate
           context.system.eventStream publish HostedChannelRestored(self, channelId, connection.info.peer, remoteNodeId)
           context.system.eventStream publish ChannelIdAssigned(self, remoteNodeId, temporaryChannelId = ByteVector32.Zeroes, channelId)
           context.system.eventStream publish ShortChannelIdAssigned(self, channelId, shortChannelId, previousShortChannelId = None)
           context.system.eventStream publish makeLocalUpdateEvent(d1.channelUpdate, d1.commitments)
-          if (!d1.commitments.announceChannel) connection sendRoutingMsg d1.channelUpdate
+
         case (_, NORMAL, OFFLINE | CLOSED, _) =>
           context.system.eventStream publish LocalChannelDown(self, channelId, shortChannelId, remoteNodeId)
         case _ =>
@@ -611,7 +618,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
 
   initialize()
 
-  def currentBlockDay: Long = kit.nodeParams.currentBlockHeight / 144
+  def currentBlockDay: Long = kit.nodeParams.currentBlockHeight.toLong / 144
 
   def isBlockDayOutOfSync(remoteSU: StateUpdate): Boolean = math.abs(remoteSU.blockDay - currentBlockDay) > 1
 
@@ -639,7 +646,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
   }
 
   def ackAddFail(cmd: CMD_ADD_HTLC, cause: ChannelException, channelUpdate: ChannelUpdate): HostedFsmState = {
-    log.warning(s"PLGN FC, ${cause.getMessage} while processing cmd=${cmd.getClass.getSimpleName} in state=$stateName")
+    log.warning(s"PLGN PHC, ${cause.getMessage} while processing cmd=${cmd.getClass.getSimpleName} in state=$stateName")
     replyToCommand(RES_ADD_FAILED(channelUpdate = Some(channelUpdate), t = cause, c = cmd), cmd)
     stay
   }
@@ -654,6 +661,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
       case Left(_: UnsignedHtlcResolve) =>
         val disconnect = Peer.Disconnect(remoteNodeId)
         val peer = FC.remoteNode2Connection.get(remoteNodeId)
+        log.info(s"PLGN PHC, force-disconnecting peer=$remoteNodeId")
         peer.foreach(_.info.peer ! disconnect)
         goto(OFFLINE) StoringAndUsing data
 
@@ -695,15 +703,15 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
     errorState StoringAndUsing data1
   } else stay
 
-  def processBlockCount(errorState: FsmStateExt, blockCount: Long, data: HC_DATA_ESTABLISHED): HostedFsmState = {
+  def processBlockCount(errorState: FsmStateExt, blockHeight: Long, data: HC_DATA_ESTABLISHED): HostedFsmState = {
     lazy val preimageMap = data.commitments.pendingOutgoingFulfills.map(fulfill => Crypto.sha256(fulfill.paymentPreimage) -> fulfill).toMap
-    val almostTimedOutIncomingHtlcs = data.almostTimedOutIncomingHtlcs(blockCount, fulfillSafety = cfg.vals.hcParams.cltvDeltaBlocks / 4 * 3)
-    val timedoutOutgoingAdds = data.timedOutOutgoingHtlcs(blockCount)
+    val almostTimedOutIncomingHtlcs = data.almostTimedOutIncomingHtlcs(blockHeight, fulfillSafety = cfg.vals.hcParams.cltvDeltaBlocks / 4 * 3)
+    val timedoutOutgoingAdds = data.timedOutOutgoingHtlcs(blockHeight)
 
     for {
       theirAdd <- almostTimedOutIncomingHtlcs
       fulfill <- preimageMap.get(theirAdd.paymentHash)
-      msg = AlmostTimedoutIncomingHtlc(theirAdd, fulfill, remoteNodeId, blockCount)
+      msg = AlmostTimedoutIncomingHtlc(theirAdd, fulfill, remoteNodeId, blockHeight)
       if !data.commitments.lastCrossSignedState.isHost
     } context.system.eventStream publish msg
 
@@ -786,6 +794,16 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
         val (data1, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_INVALID_ORACLE_PRICE)
         errorState StoringAndUsing data1 SendingHasChannelId error
       }
+    }
+  }
+
+  def manageUpdates(data: HC_DATA_ESTABLISHED): Unit = {
+    if (cfg.vals.hcParams lastUpdateDiffers data.channelUpdate) {
+      log.info(s"PLGN PHC, re-broadcasting, params differ, peer=$remoteNodeId")
+      self ! HostedChannel.SendAnnouncements(force = false)
+    } else if (data.shouldBroadcastUpdateRightAway) {
+      log.info(s"PLGN PHC, re-broadcasting, last was long ago, peer=$remoteNodeId")
+      self ! HostedChannel.SendAnnouncements(force = false)
     }
   }
 

@@ -9,9 +9,10 @@ import fr.acinq.bitcoin.{ByteVector32, Satoshi, Script}
 import fr.acinq.bitcoin.Crypto.PublicKey
 import fr.acinq.eclair._
 import fr.acinq.eclair.api.directives.EclairDirectives
+import fr.acinq.eclair.api.serde.FormParamExtractors._
 import fr.acinq.eclair.blockchain.fee.{FeeratePerByte, FeeratePerKw}
 import fr.acinq.eclair.channel.Origin
-import fr.acinq.eclair.payment.IncomingPacket
+import fr.acinq.eclair.payment.IncomingPaymentPacket
 import fr.acinq.eclair.payment.relay.PostRestartHtlcCleaner
 import fr.acinq.eclair.payment.relay.PostRestartHtlcCleaner.IncomingHtlc
 import fr.acinq.eclair.router.Router
@@ -26,6 +27,7 @@ import fr.acinq.fc.app.rate.{BitfinexSourceModified, RateOracle}
 import scodec.bits.ByteVector
 
 import scala.collection.mutable
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.stm._
 import scala.util.Try
 
@@ -131,8 +133,8 @@ class FC extends Plugin with RouteProvider {
 
     override def getIncomingHtlcs(nodeParams: NodeParams, log: LoggingAdapter): Seq[IncomingHtlc] = {
       val allHotHtlcs: Seq[DirectedHtlc] = channelsDb.listHotChannels.flatMap(_.commitments.localSpec.htlcs)
-      val decryptEither: UpdateAddHtlc => Either[FailureMessage, IncomingPacket] = IncomingPacket.decrypt(_: UpdateAddHtlc, nodeParams.privateKey)(log)
-      val resolvePacket: PartialFunction[Either[FailureMessage, IncomingPacket], IncomingHtlc] = PostRestartHtlcCleaner.decryptedIncomingHtlcs(nodeParams.db.payments)
+      val decryptEither: UpdateAddHtlc => Either[FailureMessage, IncomingPaymentPacket] = IncomingPaymentPacket.decrypt(_: UpdateAddHtlc, nodeParams.privateKey)(log)
+      val resolvePacket: PartialFunction[Either[FailureMessage, IncomingPaymentPacket], IncomingHtlc] = PostRestartHtlcCleaner.decryptedIncomingHtlcs(nodeParams.db.payments)
       allHotHtlcs.collect(DirectedHtlc.incoming).map(decryptEither).collect(resolvePacket)
     }
 
@@ -267,38 +269,44 @@ class FC extends Plugin with RouteProvider {
       complete(phcNodeAnnounces)
     }
 
+    val phcDump = postRequest("hc-phcdump") { implicit t =>
+      val phcNetwork = (syncRef ? HostedSync.GetHostedSyncData).mapTo[OperationalData].map(_.phcNetwork.channels.values)
+      complete(phcNetwork)
+    }
+
     val hotChannels: Route = postRequest("hc-hot") { implicit t =>
       complete(channelsDb.listHotChannels)
     }
 
-    invoke ~ externalFulfill ~ findByRemoteId ~ overridePropose ~ overrideAccept ~ makePublic ~ makePrivate ~
-      resize ~ margin ~ suspend ~ verifyRemoteState ~ restoreFromRemoteState ~ broadcastPreimages ~ phcNodes ~ hotChannels
+    invoke ~ externalFulfill ~ findByRemoteId ~ overridePropose ~ overrideAccept ~
+      makePublic ~ makePrivate ~ resize ~ suspend ~ verifyRemoteState ~ restoreFromRemoteState ~
+      broadcastPreimages ~ phcNodes ~ phcDump ~ hotChannels
   }
 }
 
-case object FCFeature extends Feature {
+case object FCFeature extends Feature with InitFeature with NodeFeature {
   val plugin: UnknownFeature = UnknownFeature(optional)
   val rfcName = "hosted_channels"
   lazy val mandatory = 52972
 }
 
-case object ResizeableFCFeature extends Feature {
+case object ResizeableFCFeature extends Feature with InitFeature with NodeFeature {
   val plugin: UnknownFeature = UnknownFeature(optional)
   val rfcName = "resizeable_hosted_channels"
   lazy val mandatory = 52974
 }
 
 // Depends on https://github.com/engenegr/eclair-alarmbot-plugin
-case class AlmostTimedoutIncomingHtlc(add: wire.protocol.UpdateAddHtlc, fulfill: wire.protocol.UpdateFulfillHtlc, nodeId: PublicKey, blockCount: Long) extends fr.acinq.alarmbot.CustomAlarmBotMessage {
-  override def message: String = s"AlmostTimedoutIncomingHtlc, id=${add.id}, amount=${add.amountMsat}, hash=${add.paymentHash}, expiry=${add.cltvExpiry.toLong}, tip=$blockCount, preimage=${fulfill.paymentPreimage}, peer=$nodeId"
+case class AlmostTimedoutIncomingHtlc(add: wire.protocol.UpdateAddHtlc, fulfill: wire.protocol.UpdateFulfillHtlc, nodeId: PublicKey, blockHeight: Long) extends fr.acinq.alarmbot.CustomAlarmBotMessage {
+  override def message: String = s"AlmostTimedoutIncomingHtlc, id=${add.id}, amount=${add.amountMsat}, hash=${add.paymentHash}, expiry=${add.cltvExpiry.toLong}, tip=$blockHeight, preimage=${fulfill.paymentPreimage}, peer=$nodeId"
   override def senderEntity: String = "FC"
 }
 
 case class FCSuspended(nodeId: PublicKey, isHost: Boolean, isLocal: Boolean, description: String) extends fr.acinq.alarmbot.CustomAlarmBotMessage {
-  override def message: String = s"HCSuspended, isHost=$isHost, isLocal=$isLocal, peer=$nodeId, description=$description"
+  override def message: String = s"FCSuspended, isHost=$isHost, isLocal=$isLocal, peer=$nodeId, description=$description"
   override def senderEntity: String = "FC"
 }
 
-case class FCHedgeLiability(amount: MilliSatoshi, rate: MilliSatoshi) extends fr.acinq.hedgebot.HedgeBotMessage {
+case class FCHedgeLiability(amount: MilliSatoshi, rate: MilliSatoshi) extends fr.acinq.alarmbot.ExternalHedgeMessage {
   override def senderEntity: String = "FC"
 }
