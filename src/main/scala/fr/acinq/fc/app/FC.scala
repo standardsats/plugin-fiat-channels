@@ -22,7 +22,7 @@ import fr.acinq.fc.app.channel._
 import fr.acinq.fc.app.db.{Blocking, HostedChannelsDb, HostedUpdatesDb, PreimagesDb}
 import fr.acinq.fc.app.FC._
 import fr.acinq.fc.app.network.{HostedSync, OperationalData, PHC, PreimageBroadcastCatcher}
-import fr.acinq.fc.app.rate.{BinanceSourceModified, BitfinexSource, RateOracle}
+import fr.acinq.fc.app.rate.{BitfinexSourceModified, RateOracle}
 import scodec.bits.ByteVector
 
 import scala.collection.mutable
@@ -116,7 +116,7 @@ class FC extends Plugin with RouteProvider {
     implicit val coreActorSystem: ActorSystem = eclairKit.system
     preimageRef = eclairKit.system actorOf Props(classOf[PreimageBroadcastCatcher], new PreimagesDb(config.db), eclairKit, config.vals)
     syncRef = eclairKit.system actorOf Props(classOf[HostedSync], eclairKit, new HostedUpdatesDb(config.db), config.vals.phcConfig)
-    rateOracleRef = eclairKit.system actorOf Props(classOf[RateOracle], eclairKit, new BitfinexSource("tBTCEUR", implicitly))
+    rateOracleRef = eclairKit.system actorOf Props(classOf[RateOracle], eclairKit, new BitfinexSourceModified(x => x, "tBTCEUR", implicitly))
     workerRef = eclairKit.system actorOf Props(classOf[Worker], eclairKit, syncRef, rateOracleRef, preimageRef, channelsDb, config)
     kit = eclairKit
   }
@@ -220,8 +220,8 @@ class FC extends Plugin with RouteProvider {
     }
 
     val margin: Route = postRequest("hc-margin") { implicit t =>
-      formFields("newCapacitySat".as[Satoshi], "newBalance".as[Satoshi], nodeIdFormParam) { case (newCapacity, newBalance, remoteNodeId) =>
-        completeCommand(HC_CMD_MARGIN(remoteNodeId, newCapacity, newBalance))
+      formFields("newCapacitySat".as[Satoshi], "newRate".as[MilliSatoshi], nodeIdFormParam) { case (newCapacity, newRate, remoteNodeId) =>
+        completeCommand(HC_CMD_MARGIN(remoteNodeId, newCapacity, newRate))
       }
     }
 

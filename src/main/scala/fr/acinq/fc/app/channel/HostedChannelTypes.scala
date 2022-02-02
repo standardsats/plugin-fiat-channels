@@ -41,7 +41,7 @@ case class HC_CMD_PRIVATE(remoteNodeId: PublicKey) extends HasRemoteNodeIdHosted
 case class HC_CMD_RESIZE(remoteNodeId: PublicKey, newCapacity: Satoshi) extends HasRemoteNodeIdHostedCommand
 
 // Increase balance and capacity to match fiat balance
-case class HC_CMD_MARGIN(remoteNodeId: PublicKey, newCapacity: Satoshi, newBalance: Satoshi) extends HasRemoteNodeIdHostedCommand
+case class HC_CMD_MARGIN(remoteNodeId: PublicKey, newCapacity: Satoshi, newRate: MilliSatoshi) extends HasRemoteNodeIdHostedCommand
 
 case class HC_CMD_RESTORE(remoteNodeId: PublicKey, remoteData: HostedState) extends HasRemoteNodeIdHostedCommand
 
@@ -107,10 +107,11 @@ case class HC_DATA_ESTABLISHED(commitments: HostedCommitments,
   def withMargin(margin: MarginChannel): HC_DATA_ESTABLISHED =
     me.modify(_.commitments.lastCrossSignedState.initHostedChannel.maxHtlcValueInFlightMsat).setTo(margin.newCapacityMsatU64)
       .modify(_.commitments.lastCrossSignedState.initHostedChannel.channelCapacityMsat).setTo(margin.newCapacity.toMilliSatoshi)
-      .modify(_.commitments.localSpec.toRemote).usingIf(!commitments.lastCrossSignedState.isHost)(_ + margin.newCapacity - commitments.capacity)
-      .modify(_.commitments.localSpec.toRemote).usingIf(commitments.lastCrossSignedState.isHost)(_ => margin.newBalance.toMilliSatoshi)
-      .modify(_.commitments.localSpec.toLocal).usingIf(commitments.lastCrossSignedState.isHost)(_ + margin.newCapacity - commitments.capacity)
-      .modify(_.commitments.localSpec.toLocal).usingIf(!commitments.lastCrossSignedState.isHost)(_ => margin.newBalance.toMilliSatoshi)
+      .modify(_.commitments.localSpec.toRemote).usingIf(!commitments.lastCrossSignedState.isHost)(_ => margin.newCapacity - margin.newLocalBalance(commitments.lastCrossSignedState))
+      .modify(_.commitments.localSpec.toLocal).usingIf(!commitments.lastCrossSignedState.isHost)(_ => margin.newLocalBalance(commitments.lastCrossSignedState))
+      .modify(_.commitments.localSpec.toRemote).usingIf(commitments.lastCrossSignedState.isHost)(_ => margin.newRemoteBalance(commitments.lastCrossSignedState))
+      .modify(_.commitments.localSpec.toLocal).usingIf(commitments.lastCrossSignedState.isHost)(_ => margin.newCapacity - margin.newRemoteBalance(commitments.lastCrossSignedState))
+      .modify(_.commitments.lastCrossSignedState.rate).setTo(margin.newRate)
       .modify(_.marginProposal).setTo(None)
 }
 

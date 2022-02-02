@@ -321,7 +321,9 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
       }
 
 
-    case Event(remoteSU: StateUpdate, data: HC_DATA_ESTABLISHED) if remoteSU.localSigOfRemoteLCSS != data.commitments.lastCrossSignedState.remoteSigOfLocal => attemptStateUpdate(remoteSU, data)
+    case Event(remoteSU: StateUpdate, data: HC_DATA_ESTABLISHED) if remoteSU.localSigOfRemoteLCSS != data.commitments.lastCrossSignedState.remoteSigOfLocal =>
+      val currentRate = data.lastOracleState.getOrElse(data.commitments.lastCrossSignedState.rate)
+      attemptStateUpdate(remoteSU, currentRate, data)
 
     case Event(_: QueryCurrentRate, data: HC_DATA_ESTABLISHED) =>
       RateOracle.getCurrentRate() match {
@@ -476,18 +478,19 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
       else stay StoringAndUsing data.copy(resizeProposal = Some(msg), marginProposal = None, overrideProposal = None) SendingHosted msg replying CMDResSuccess(cmd) Receiving CMD_SIGN(None)
 
     case Event(cmd: HC_CMD_MARGIN, data: HC_DATA_ESTABLISHED) =>
-      RateOracle.getCurrentRate() match {
-        case Some(currentRate) =>
-          val nextMargin = data.commitments.nextMaxFiatMargin(currentRate)
+      RateOracle.getMaxRate() match {
+        case Some(maxRate) =>
+          val nextMargin = data.commitments.nextMaxFiatMargin(maxRate)
           val maxCapacity = cfg.vals.phcConfig.maxCapacity
           val maxCapacityInc = MilliSatoshi(HostedCommitments.marginMaxCapacityFactor * maxCapacity.toLong)
-          val msg = MarginChannel(cmd.newCapacity, cmd.newBalance).sign(kit.nodeParams.privateKey)
+          val msg = MarginChannel(cmd.newCapacity, cmd.newRate).sign(kit.nodeParams.privateKey)
+          val newBalance = msg.newLocalBalance(data.commitments.lastCrossSignedState)
           if (data.errorExt.nonEmpty) stay replying CMDResFailure("Margining declined: channel is in error state")
           else if (data.marginProposal.nonEmpty) stay replying CMDResFailure("Margining declined: channel is already being margined")
           else if (data.commitments.lastCrossSignedState.isHost) stay replying CMDResFailure("Margining declined: only client can initiate margin increase")
           else if (data.commitments.capacity > msg.newCapacity) stay replying CMDResFailure("Margining declined: new capacity must be larger than current capacity")
-          else if (data.commitments.localSpec.toLocal > msg.newBalance) stay replying CMDResFailure("Margining declined: new balance must be larger than old balance")
-          else if (nextMargin < msg.newBalance) stay replying CMDResFailure("Margining declined: new balance must be less than current fiat balance")
+          else if (data.commitments.localSpec.toLocal > newBalance) stay replying CMDResFailure("Margining declined: new balance must be larger than old balance")
+          else if (nextMargin < newBalance) stay replying CMDResFailure("Margining declined: new balance must be less than current fiat balance")
           else if (maxCapacityInc < msg.newCapacity) stay replying CMDResFailure("Margining declined: new capacity must not exceed max allowed capacity")
           else stay StoringAndUsing data.copy(marginProposal = Some(msg), resizeProposal = None, overrideProposal = None) SendingHosted msg replying CMDResSuccess(cmd) Receiving CMD_SIGN(None)
 
@@ -745,13 +748,14 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
   }
 
   def processMarginProposal(errorState: FsmStateExt, margin: MarginChannel, data: HC_DATA_ESTABLISHED): HostedFsmState = {
-    RateOracle.getCurrentRate() match {
+    RateOracle.getMaxRate() match {
       case Some(currentRate) =>
         val isSignatureFine = margin.verifyClientSig(remoteNodeId)
-        log.info(s"PLGN FC, margin proposal, current oracle rate=$currentRate, peer=$remoteNodeId")
+        log.info(s"PLGN FC, margin proposal=$margin, max recent oracle rate=$currentRate, peer=$remoteNodeId")
         val nextMargin = data.commitments.nextMaxFiatMargin(currentRate)
         val maxCapacity = cfg.vals.phcConfig.maxCapacity
         val maxCapacityInc = MilliSatoshi(HostedCommitments.marginMaxCapacityFactor * maxCapacity.toLong)
+        val newBalance = margin.newRemoteBalance(data.commitments.lastCrossSignedState)
 
         if (margin.newCapacity < data.commitments.capacity) {
           log.info(s"PLGN FC, margin check fail, new capacity is less than current one, peer=$remoteNodeId")
@@ -761,16 +765,16 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
           log.info(s"PLGN FC, margin check fail, new capacity is more than 10 * max allowed one, peer=$remoteNodeId")
           val (data1, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_INVALID_MARGIN)
           errorState StoringAndUsing data1 SendingHasChannelId error
-        } else if (data.commitments.localSpec.toRemote > margin.newBalance) {
-          log.info(s"PLGN FC, margin check fail, new remote balance=${margin.newBalance} is less than old balance=${data.commitments.localSpec.toRemote}, peer=$remoteNodeId")
+        } else if (data.commitments.localSpec.toRemote > newBalance) {
+          log.info(s"PLGN FC, margin check fail, new remote balance=${newBalance} is less than old balance=${data.commitments.localSpec.toRemote}, peer=$remoteNodeId")
           val (data1, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_INVALID_MARGIN)
           errorState StoringAndUsing data1 SendingHasChannelId error
         } else if (!isSignatureFine) {
           log.info(s"PLGN FC, margin signature check fail, peer=$remoteNodeId")
           val (data1, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_INVALID_MARGIN)
           errorState StoringAndUsing data1 SendingHasChannelId error
-        } else if (margin.newBalance.toMilliSatoshi > nextMargin) {
-          log.info(s"PLGN FC, margin requested to high margin, margin=$margin.newBalance, expectedMargin=$nextMargin, peer=$remoteNodeId")
+        } else if (margin.newRate > currentRate) {
+          log.info(s"PLGN FC, margin requested too high rate, rate=$margin.newRate, expectedRate=$currentRate, peer=$remoteNodeId")
           val (data1, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_INVALID_MARGIN)
           errorState StoringAndUsing data1 SendingHasChannelId error
         } else {
@@ -785,14 +789,14 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
     }
   }
 
-  def attemptStateUpdate(remoteSU: StateUpdate, data: HC_DATA_ESTABLISHED): HostedFsmState = {
+  def attemptStateUpdate(remoteSU: StateUpdate, newRate: MilliSatoshi, data: HC_DATA_ESTABLISHED): HostedFsmState = {
     log.info(s"PLGN FC, attemptStateUpdate with ${remoteSU}")
-    val newRate = data.lastOracleState.getOrElse(data.commitments.lastCrossSignedState.rate)
     log.info(s"Channel old rate is ${data.commitments.lastCrossSignedState.rate}")
     log.info(s"My new rate is ${newRate}")
     val lcss1 = data.commitments.nextLocalUnsignedLCSS(remoteSU.blockDay).copy(rate = newRate, remoteSigOfLocal = remoteSU.localSigOfRemoteLCSS).withLocalSigOfRemote(kit.nodeParams.privateKey)
     log.info(s"New channel rate is ${lcss1.rate}")
     val commits1 = data.commitments.copy(lastCrossSignedState = lcss1, localSpec = data.commitments.nextLocalSpec, nextLocalUpdates = Nil, nextRemoteUpdates = Nil)
+    log.info(s"Verify remote signature of local state: $lcss1")
     val isRemoteSigOk = lcss1.verifyRemoteSig(remoteNodeId)
     val isBlockDayWrong = isBlockDayOutOfSync(remoteSU)
 
@@ -804,9 +808,26 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
       stay StoringAndUsing data Receiving CMD_SIGN(None)
     } else if (!isRemoteSigOk) {
       data.marginProposal.map(data.withMargin) match {
-        case Some(data1) => attemptStateUpdate(remoteSU, data1)
+        case Some(data1) =>
+          log.info(s"Remote sign is not ok, trying with known margin resize")
+          RateOracle.getMaxRate() match {
+            case Some(maxRate) =>
+              if (maxRate < remoteSU.rate) {
+                log.info(s"Margin rate is hiher than expected. Our max rate: ${maxRate}, client wants: ${remoteSU.rate}")
+                val (data1, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_INVALID_ORACLE_PRICE)
+                goto(CLOSED) StoringAndUsing data1 SendingHasChannelId error
+              } else {
+                attemptStateUpdate(remoteSU, remoteSU.rate, data1)
+              }
+            case None =>
+              log.info(s"Doesn't know recent max rate, so not signing")
+              val (data1, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_INVALID_ORACLE_PRICE)
+              goto(CLOSED) StoringAndUsing data1 SendingHasChannelId error
+          }
         case None => data.resizeProposal.map(data.withResize) match {
-          case Some(data1) => attemptStateUpdate(remoteSU, data1)
+          case Some(data1) =>
+            log.info(s"Remote sign is not ok, trying with known resize")
+            attemptStateUpdate(remoteSU, newRate, data1)
           case None =>
             val (data1, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_WRONG_REMOTE_SIG)
             goto(CLOSED) StoringAndUsing data1 SendingHasChannelId error

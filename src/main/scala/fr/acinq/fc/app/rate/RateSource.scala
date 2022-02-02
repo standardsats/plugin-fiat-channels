@@ -43,6 +43,23 @@ class BitfinexSource(ticker: String = "tBTCUSD", implicit val system: ActorSyste
   }
 }
 
+class BitfinexSourceModified(predicate: Double => Double, ticker: String = "tBTCUSD", implicit val system: ActorSystem) extends RateSource {
+  val http = Http(system)
+
+  def askRates: Future[FiatRate] = {
+    for {
+      res <- http.singleRequest(HttpRequest(uri = "https://api-pub.bitfinex.com/v2/ticker/" + ticker))
+      body <- res match {
+        case HttpResponse(StatusCodes.OK, headers, entity, _) => entity.dataBytes.runFold(ByteString(""))(_ ++ _)
+        case resp @ HttpResponse(code, _, _, _) =>
+          resp.discardEntityBytes()
+          throw new RuntimeException("Request failed, response code: " + code)
+      }
+      values <- Unmarshal(body).to[List[Double]]
+    } yield FiatRate(predicate(values.head))
+  }
+}
+
 class BlockchainInfo24h(implicit system: ActorSystem) extends RateSource {
   val http = Http(system)
 

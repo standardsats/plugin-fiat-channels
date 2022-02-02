@@ -79,7 +79,7 @@ object HCProtocolCodecs {
 
   val marginChannelCodec = {
     (satoshi withContext "newCapacity") ::
-    (satoshi withContext "newBalance") ::
+    (millisatoshi withContext "newRate") ::
       (bytes64 withContext "clientSig")
   }.as[MarginChannel]
 
