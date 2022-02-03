@@ -83,12 +83,12 @@ trait BinanceJsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
   implicit val binanceFormat = jsonFormat1(BinanceResponse)
 }
 
-class BinanceSource(implicit system: ActorSystem) extends RateSource with BinanceJsonSupport {
+class BinanceSource(ticker: String = "BTCUSDT", implicit val system: ActorSystem) extends RateSource with BinanceJsonSupport {
   val http = Http(system)
 
   def askRates: Future[FiatRate] = {
     for {
-      res <- http.singleRequest(HttpRequest(uri = "https://api.binance.com/api/v3/avgPrice?symbol=BTCUSDT"))
+      res <- http.singleRequest(HttpRequest(uri = "https://api.binance.com/api/v3/avgPrice?symbol=" + ticker))
       body <- res match {
         case HttpResponse(StatusCodes.OK, headers, entity, _) => entity.dataBytes.runFold(ByteString(""))(_ ++ _)
         case resp @ HttpResponse(code, _, _, _) =>
@@ -100,12 +100,12 @@ class BinanceSource(implicit system: ActorSystem) extends RateSource with Binanc
   }
 }
 
-class BinanceSourceModified(predicate: Double => Double, implicit val system: ActorSystem) extends RateSource with BinanceJsonSupport {
+class BinanceSourceModified(predicate: Double => Double, ticker: String = "BTCUSDT", implicit val system: ActorSystem) extends RateSource with BinanceJsonSupport {
   val http = Http(system)
 
   def askRates: Future[FiatRate] = {
     for {
-      res <- http.singleRequest(HttpRequest(uri = "https://api.binance.com/api/v3/avgPrice?symbol=BTCUSDT"))
+      res <- http.singleRequest(HttpRequest(uri = "https://api.binance.com/api/v3/avgPrice?symbol=" + ticker))
       body <- res match {
         case HttpResponse(StatusCodes.OK, headers, entity, _) => entity.dataBytes.runFold(ByteString(""))(_ ++ _)
         case resp @ HttpResponse(code, _, _, _) =>
