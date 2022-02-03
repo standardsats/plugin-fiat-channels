@@ -172,74 +172,74 @@ class FC extends Plugin with RouteProvider {
       complete(futureResponse)
     }
 
-    val invoke: Route = postRequest("hc-invoke") { implicit t =>
+    val invoke: Route = postRequest("fc-invoke") { implicit t =>
       formFields("refundAddress", "secret".as[ByteVector](binaryDataUnmarshaller), nodeIdFormParam) { case (refundAddress, secret, remoteNodeId) =>
         val refundPubkeyScript = Script.write(fr.acinq.eclair.addressToPublicKeyScript(refundAddress, kit.nodeParams.chainHash))
         completeCommand(HC_CMD_LOCAL_INVOKE(remoteNodeId, refundPubkeyScript, secret))
       }
     }
 
-    val externalFulfill: Route = postRequest("hc-externalfulfill") { implicit t =>
+    val externalFulfill: Route = postRequest("fc-externalfulfill") { implicit t =>
       formFields("htlcId".as[Long], "paymentPreimage".as[ByteVector32], nodeIdFormParam) { case (htlcId, paymentPreimage, remoteNodeId) =>
         completeCommand(HC_CMD_EXTERNAL_FULFILL(remoteNodeId, htlcId, paymentPreimage))
       }
     }
 
-    val findByRemoteId: Route = postRequest("hc-findbyremoteid") { implicit t =>
+    val findByRemoteId: Route = postRequest("fc-findbyremoteid") { implicit t =>
       formFields(nodeIdFormParam) { remoteNodeId =>
         completeCommand(HC_CMD_GET_INFO(remoteNodeId))
       }
     }
 
-    val overridePropose: Route = postRequest("hc-overridepropose") { implicit t =>
+    val overridePropose: Route = postRequest("fc-overridepropose") { implicit t =>
       formFields("newLocalBalanceMsat".as[MilliSatoshi], nodeIdFormParam) { case (newLocalBalance, remoteNodeId) =>
         completeCommand(HC_CMD_OVERRIDE_PROPOSE(remoteNodeId, newLocalBalance))
       }
     }
 
-    val overrideAccept: Route = postRequest("hc-overrideaccept") { implicit t =>
+    val overrideAccept: Route = postRequest("fc-overrideaccept") { implicit t =>
       formFields(nodeIdFormParam) { remoteNodeId =>
         completeCommand(HC_CMD_OVERRIDE_ACCEPT(remoteNodeId))
       }
     }
 
-    val makePublic: Route = postRequest("hc-makepublic") { implicit t =>
+    val makePublic: Route = postRequest("fc-makepublic") { implicit t =>
       formFields(nodeIdFormParam) { remoteNodeId =>
         completeCommand(HC_CMD_PUBLIC(remoteNodeId))
       }
     }
 
-    val makePrivate: Route = postRequest("hc-makeprivate") { implicit t =>
+    val makePrivate: Route = postRequest("fc-makeprivate") { implicit t =>
       formFields(nodeIdFormParam) { remoteNodeId =>
         completeCommand(HC_CMD_PRIVATE(remoteNodeId))
       }
     }
 
-    val resize: Route = postRequest("hc-resize") { implicit t =>
+    val resize: Route = postRequest("fc-resize") { implicit t =>
       formFields("newCapacitySat".as[Satoshi], nodeIdFormParam) { case (newCapacity, remoteNodeId) =>
         completeCommand(HC_CMD_RESIZE(remoteNodeId, newCapacity))
       }
     }
 
-    val margin: Route = postRequest("hc-margin") { implicit t =>
+    val margin: Route = postRequest("fc-margin") { implicit t =>
       formFields("newCapacitySat".as[Satoshi], "newRate".as[MilliSatoshi], nodeIdFormParam) { case (newCapacity, newRate, remoteNodeId) =>
         completeCommand(HC_CMD_MARGIN(remoteNodeId, newCapacity, newRate))
       }
     }
 
-    val suspend: Route = postRequest("hc-suspend") { implicit t =>
+    val suspend: Route = postRequest("fc-suspend") { implicit t =>
       formFields(nodeIdFormParam) { remoteNodeId =>
         completeCommand(HC_CMD_SUSPEND(remoteNodeId))
       }
     }
 
-    val verifyRemoteState: Route = postRequest("hc-verifyremotestate") { implicit t =>
+    val verifyRemoteState: Route = postRequest("fc-verifyremotestate") { implicit t =>
       formFields(hostedStateUnmarshaller) { state =>
         complete(getHostedStateResult(state))
       }
     }
 
-    val restoreFromRemoteState: Route = postRequest("hc-restorefromremotestate") { implicit t =>
+    val restoreFromRemoteState: Route = postRequest("fc-restorefromremotestate") { implicit t =>
       formFields(hostedStateUnmarshaller) { state =>
         val RemoteHostedStateResult(remoteState, Some(remoteNodeId), isLocalSigOk) = getHostedStateResult(state)
         require(isLocalSigOk, "Can't proceed: local signature of provided HC state is invalid")
@@ -247,7 +247,7 @@ class FC extends Plugin with RouteProvider {
       }
     }
 
-    val broadcastPreimages: Route = postRequest("hc-broadcastpreimages") { implicit t =>
+    val broadcastPreimages: Route = postRequest("fc-broadcastpreimages") { implicit t =>
       formFields("preimages".as[List[ByteVector32]], "feerateSatByte".as[FeeratePerByte]) { case (preimages, feerateSatByte) =>
         require(feerateSatByte.feerate.toLong > 1, "Preimage broadcast funding feerate must be higher than 1 sat/byte")
         val cmd = PreimageBroadcastCatcher.SendPreimageBroadcast(FeeratePerKw(feerateSatByte), preimages.toSet)
@@ -256,31 +256,13 @@ class FC extends Plugin with RouteProvider {
       }
     }
 
-    val phcNodes: Route = postRequest("hc-phcnodes") { implicit t =>
-      val phcNodeAnnounces = for {
-        routerData <- (kit.router ? Router.GetRouterData).mapTo[Router.Data]
-        hostedSyncData <- (syncRef ? HostedSync.GetHostedSyncData).mapTo[OperationalData]
-      } yield hostedSyncData.phcNetwork.channels.values.toSet.flatMap { phc: PHC =>
-        val node1AnnounceOpt = routerData.nodes.get(phc.channelAnnounce.nodeId1)
-        val node2AnnounceOpt = routerData.nodes.get(phc.channelAnnounce.nodeId2)
-        node1AnnounceOpt ++ node2AnnounceOpt
-      }
-
-      complete(phcNodeAnnounces)
-    }
-
-    val phcDump = postRequest("hc-phcdump") { implicit t =>
-      val phcNetwork = (syncRef ? HostedSync.GetHostedSyncData).mapTo[OperationalData].map(_.phcNetwork.channels.values)
-      complete(phcNetwork)
-    }
-
-    val hotChannels: Route = postRequest("hc-hot") { implicit t =>
+    val hotChannels: Route = postRequest("fc-hot") { implicit t =>
       complete(channelsDb.listHotChannels)
     }
 
     invoke ~ externalFulfill ~ findByRemoteId ~ overridePropose ~ overrideAccept ~
       makePublic ~ makePrivate ~ resize ~ suspend ~ verifyRemoteState ~ restoreFromRemoteState ~
-      broadcastPreimages ~ phcNodes ~ phcDump ~ hotChannels
+      broadcastPreimages ~ hotChannels
   }
 }
 
