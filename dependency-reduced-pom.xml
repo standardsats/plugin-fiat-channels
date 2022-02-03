@@ -47,7 +47,7 @@
           <transformers>
             <transformer>
               <manifestEntries>
-                <Main-Class>fr.acinq.hc.app.HC</Main-Class>
+                <Main-Class>fr.acinq.fc.app.FC</Main-Class>
               </manifestEntries>
             </transformer>
           </transformers>
