@@ -9,7 +9,7 @@ import fr.acinq.bitcoin.Crypto.PublicKey
 import fr.acinq.eclair
 import fr.acinq.eclair.io._
 import fr.acinq.eclair.router.{Router, SyncProgress}
-import fr.acinq.eclair.wire.internal.channel.version3.HCProtocolCodecs
+import fr.acinq.eclair.wire.internal.channel.version3.FCProtocolCodecs
 import fr.acinq.fc.app.channel._
 import fr.acinq.fc.app.db.Blocking.timeout
 import fr.acinq.fc.app.db.HostedChannelsDb
@@ -90,7 +90,7 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, r
     case peerMsg @ UnknownMessageReceived(_, _, message, _) if FC.announceTags contains message.tag => hostedSync ! peerMsg
 
     case UnknownMessageReceived(_, nodeId, message, _) if FC.hostedMessageTags contains message.tag =>
-      Tuple3(HCProtocolCodecs decodeHostedMessage message, FC.remoteNode2Connection get nodeId, inMemoryHostedChannels get nodeId) match {
+      Tuple3(FCProtocolCodecs decodeHostedMessage message, FC.remoteNode2Connection get nodeId, inMemoryHostedChannels get nodeId) match {
         case (_: Attempt.Failure, _, _) => logger.info(s"PLGN FC, hosted message decoding failed, messageTag=${message.tag}, peer=$nodeId")
         case (Attempt.Successful(_: ReplyPublicHostedChannelsEnd), Some(wrap), _) => hostedSync ! HostedSync.GotAllSyncFrom(wrap)
         case (Attempt.Successful(_: QueryPublicHostedChannels), Some(wrap), _) => hostedSync ! HostedSync.SendSyncTo(wrap)
@@ -103,7 +103,7 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, r
       }
 
     case UnknownMessageReceived(_, nodeId, message, _) if FC.chanIdMessageTags contains message.tag =>
-      Tuple2(HCProtocolCodecs decodeHasChanIdMessage message, inMemoryHostedChannels get nodeId) match {
+      Tuple2(FCProtocolCodecs decodeHasChanIdMessage message, inMemoryHostedChannels get nodeId) match {
         case (_: Attempt.Failure, _) => logger.info(s"PLGN FC, HasChannelId message decoding fail, messageTag=${message.tag}, peer=$nodeId")
         case (Attempt.Successful(error: eclair.wire.protocol.Error), null) => restore(Tools.none, _ |> HCPeerConnected |> error)(nodeId)
         case (_, null) => logger.info(s"PLGN FC, no target for HasChannelIdMessage, messageTag=${message.tag}, peer=$nodeId")

@@ -1,7 +1,7 @@
 package fr.acinq.fc.app.db
 
 import fr.acinq.bitcoin.Crypto.PublicKey
-import fr.acinq.eclair.wire.internal.channel.version3.HostedChannelCodecs.HC_DATA_ESTABLISHED_Codec
+import fr.acinq.eclair.wire.internal.channel.version3.FiatChannelCodecs.HC_DATA_ESTABLISHED_Codec
 import fr.acinq.fc.app.channel.HC_DATA_ESTABLISHED
 import fr.acinq.fc.app.db.Blocking.ByteArray
 import scodec.bits.{BitVector, ByteVector}

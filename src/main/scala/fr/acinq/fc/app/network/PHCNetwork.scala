@@ -4,7 +4,7 @@ import fr.acinq.bitcoin.Crypto
 import fr.acinq.bitcoin.Crypto.PublicKey
 import fr.acinq.eclair.ShortChannelId
 import fr.acinq.eclair.router.Announcements
-import fr.acinq.eclair.wire.internal.channel.version3.HCProtocolCodecs
+import fr.acinq.eclair.wire.internal.channel.version3.FCProtocolCodecs
 import fr.acinq.eclair.wire.protocol.{AnnouncementMessage, ChannelAnnouncement, ChannelUpdate, UnknownMessage}
 import fr.acinq.fc.app.PHCConfig
 import fr.acinq.fc.app.Tools._
@@ -23,7 +23,7 @@ object PHC {
 }
 
 case class PHC(shortChannelId: ShortChannelId, channelAnnounce: ChannelAnnouncement, channelUpdate1: Option[ChannelUpdate] = None, channelUpdate2: Option[ChannelUpdate] = None) {
-  lazy val orderedMessages: List[UnknownMessage] = for (message <- channelAnnounce +: channelUpdate1 ++: channelUpdate2 ++: Nil) yield HCProtocolCodecs.toUnknownAnnounceMessage(message, isGossip = false)
+  lazy val orderedMessages: List[UnknownMessage] = for (message <- channelAnnounce +: channelUpdate1 ++: channelUpdate2 ++: Nil) yield FCProtocolCodecs.toUnknownAnnounceMessage(message, isGossip = false)
   def nodeIdToShortId = List(channelAnnounce.nodeId1 -> channelAnnounce.shortChannelId, channelAnnounce.nodeId2 -> channelAnnounce.shortChannelId)
   def tuple: (ShortChannelId, PHC) = (shortChannelId, this)
 

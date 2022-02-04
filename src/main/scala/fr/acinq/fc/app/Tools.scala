@@ -7,7 +7,7 @@ import fr.acinq.eclair._
 import fr.acinq.eclair.io.Peer.OutgoingMessage
 import fr.acinq.eclair.io.PeerConnected
 import fr.acinq.eclair.router.Announcements
-import fr.acinq.eclair.wire.internal.channel.version3.HCProtocolCodecs
+import fr.acinq.eclair.wire.internal.channel.version3.FCProtocolCodecs
 import fr.acinq.eclair.wire.protocol._
 import fr.acinq.fc.app.channel.HostedCommitments
 import net.ceedubs.ficus.Ficus._
@@ -74,9 +74,9 @@ trait PeerConnectedWrap {
 }
 
 case class PeerConnectedWrapNormal(info: PeerConnected) extends PeerConnectedWrap { me =>
-  def sendHasChannelIdMsg(message: HasChannelId): Unit = me sendUnknownMsg HCProtocolCodecs.toUnknownHasChanIdMessage(message)
-  def sendHostedChannelMsg(message: HostedChannelMessage): Unit = me sendUnknownMsg HCProtocolCodecs.toUnknownHostedMessage(message)
-  def sendRoutingMsg(message: AnnouncementMessage): Unit = me sendUnknownMsg HCProtocolCodecs.toUnknownAnnounceMessage(message, isGossip = true)
+  def sendHasChannelIdMsg(message: HasChannelId): Unit = me sendUnknownMsg FCProtocolCodecs.toUnknownHasChanIdMessage(message)
+  def sendHostedChannelMsg(message: HostedChannelMessage): Unit = me sendUnknownMsg FCProtocolCodecs.toUnknownHostedMessage(message)
+  def sendRoutingMsg(message: AnnouncementMessage): Unit = me sendUnknownMsg FCProtocolCodecs.toUnknownAnnounceMessage(message, isGossip = true)
   def sendUnknownMsg(message: UnknownMessage): Unit = info.peer ! OutgoingMessage(message, info.connectionInfo.peerConnection)
   lazy val remoteIp: Array[Byte] = info.connectionInfo.address.getAddress.getAddress
 }

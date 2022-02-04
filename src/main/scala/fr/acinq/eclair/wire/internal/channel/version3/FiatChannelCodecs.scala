@@ -1,7 +1,7 @@
 package fr.acinq.eclair.wire.internal.channel.version3
 
 import fr.acinq.eclair.wire.internal.channel.version3.ChannelCodecs3.Codecs.{commitmentSpecCodec, originsMapCodec}
-import fr.acinq.eclair.wire.internal.channel.version3.HCProtocolCodecs._
+import fr.acinq.eclair.wire.internal.channel.version3.FCProtocolCodecs._
 import fr.acinq.eclair.wire.protocol.CommonCodecs.{bool8, bytes32, lengthDelimited, millisatoshi, publicKey}
 import fr.acinq.eclair.wire.protocol.LightningMessageCodecs._
 import fr.acinq.eclair.wire.protocol.{HasChannelId, UpdateMessage}
@@ -10,7 +10,7 @@ import scodec.codecs.{listOfN, optional, uint16, utf8, variableSizeBytes}
 import scodec.{Attempt, Codec}
 
 
-object HostedChannelCodecs {
+object FiatChannelCodecs {
   val updateMessageWithHasChannelIdCodec: Codec[UpdateMessage with HasChannelId] = lengthDelimited {
     lightningMessageCodec.narrow(Attempt successful _.asInstanceOf[UpdateMessage with HasChannelId], identity)
   }

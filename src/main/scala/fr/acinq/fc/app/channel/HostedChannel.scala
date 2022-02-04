@@ -15,7 +15,7 @@ import fr.acinq.eclair.io.Peer
 import fr.acinq.eclair.payment.relay.Relayer
 import fr.acinq.eclair.router.Announcements
 import fr.acinq.eclair.transactions.{CommitmentSpec, DirectedHtlc, IncomingHtlc, OutgoingHtlc}
-import fr.acinq.eclair.wire.internal.channel.version3.HCProtocolCodecs
+import fr.acinq.eclair.wire.internal.channel.version3.FCProtocolCodecs
 import fr.acinq.eclair.wire.protocol._
 import fr.acinq.fc.app.Tools.{DuplicateHandler, DuplicateShortId}
 import fr.acinq.fc.app._
@@ -582,7 +582,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
     }
 
     def Announcing(message: AnnouncementMessage): HostedFsmState = {
-      hostedSync ! HCProtocolCodecs.toUnknownAnnounceMessage(message, isGossip = true)
+      hostedSync ! FCProtocolCodecs.toUnknownAnnounceMessage(message, isGossip = true)
       state
     }
 
@@ -854,7 +854,9 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
     } else {
       val commitments1 = clearOrigin(commits1, data.commitments)
       context.system.eventStream publish AvailableBalanceChanged(self, channelId, shortChannelId, commitments = commitments1)
-      context.system.eventStream publish FCHedgeLiability(MilliSatoshi(1), MilliSatoshi(1))
+      val delta = data.commitments.lastCrossSignedState.remoteBalanceMsat - commits1.lastCrossSignedState.remoteBalanceMsat
+      println(delta)
+      context.system.eventStream publish FCHedgeLiability(delta, commits1.lastCrossSignedState.rate)
       stay StoringAndUsing data.copy(commitments = commitments1) RelayingRemoteUpdates data.commitments SendingHosted commits1.lastCrossSignedState.stateUpdate
     }
   }

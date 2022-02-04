@@ -4,7 +4,7 @@ import fr.acinq.bitcoin.Crypto.PublicKey
 import fr.acinq.eclair.channel.Nothing
 import fr.acinq.eclair.io.UnknownMessageReceived
 import fr.acinq.eclair.router.{Router, SyncProgress}
-import fr.acinq.eclair.wire.internal.channel.version3.HCProtocolCodecs
+import fr.acinq.eclair.wire.internal.channel.version3.FCProtocolCodecs
 import fr.acinq.eclair.wire.protocol.{ChannelAnnouncement, ChannelUpdate, UnknownMessage}
 import fr.acinq.eclair.{FSMDiagnosticActorLogging, Kit}
 import fr.acinq.fc.app.FC._
@@ -303,7 +303,7 @@ class HostedSync(kit: Kit, updatesDb: HostedUpdatesDb, phcConfig: PHCConfig) ext
 
     // Order matters here: first we check if this is an update for an existing channel, then try a new one
     def process(fromNodeId: PublicKey, msg: UnknownMessage, data: OperationalData): OperationalData =
-      HCProtocolCodecs.decodeAnnounceMessage(msg) match {
+      FCProtocolCodecs.decodeAnnounceMessage(msg) match {
         case Attempt.Successful(message: ChannelAnnouncement) if baseCheck(message, data) && data.phcNetwork.channels.contains(message.shortChannelId) =>
           // This is an update of an already existing PHC because it's contained in channels map
           processKnownAnnounce(message, data, fromNodeId)

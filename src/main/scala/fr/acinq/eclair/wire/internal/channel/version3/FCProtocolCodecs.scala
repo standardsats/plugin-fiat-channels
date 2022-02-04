@@ -11,7 +11,7 @@ import scodec.codecs._
 import scodec.{Attempt, Codec, DecodeResult, Err}
 
 
-object HCProtocolCodecs {
+object FCProtocolCodecs {
   val invokeHostedChannelCodec = {
     (bytes32 withContext "chainHash") ::
       (varsizebinarydata withContext "refundScriptPubKey") ::

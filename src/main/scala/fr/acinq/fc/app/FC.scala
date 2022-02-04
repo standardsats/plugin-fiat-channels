@@ -17,7 +17,7 @@ import fr.acinq.eclair.payment.relay.PostRestartHtlcCleaner
 import fr.acinq.eclair.payment.relay.PostRestartHtlcCleaner.IncomingHtlc
 import fr.acinq.eclair.router.Router
 import fr.acinq.eclair.transactions.DirectedHtlc
-import fr.acinq.eclair.wire.internal.channel.version3.HostedChannelCodecs
+import fr.acinq.eclair.wire.internal.channel.version3.FiatChannelCodecs
 import fr.acinq.eclair.wire.protocol.{FailureMessage, UpdateAddHtlc}
 import fr.acinq.fc.app.channel._
 import fr.acinq.fc.app.db.{Blocking, HostedChannelsDb, HostedUpdatesDb, PreimagesDb}
@@ -161,7 +161,7 @@ class FC extends Plugin with RouteProvider {
     val hostedStateUnmarshaller = "state".as[ByteVector](binaryDataUnmarshaller)
 
     def getHostedStateResult(state: ByteVector) = {
-      val remoteState = HostedChannelCodecs.hostedStateCodec.decodeValue(state.toBitVector).require
+      val remoteState = FiatChannelCodecs.hostedStateCodec.decodeValue(state.toBitVector).require
       val remoteNodeIdOpt = Set(remoteState.nodeId1, remoteState.nodeId2).find(kit.nodeParams.nodeId.!=)
       val isLocalSigOk = remoteState.lastCrossSignedState.verifyRemoteSig(kit.nodeParams.nodeId)
       RemoteHostedStateResult(remoteState, remoteNodeIdOpt, isLocalSigOk)

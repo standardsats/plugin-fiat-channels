@@ -8,7 +8,7 @@ import fr.acinq.eclair.blockchain.bitcoind.rpc.BitcoinCoreClient
 import fr.acinq.eclair.blockchain.bitcoind.rpc.BitcoinCoreClient.FundTransactionOptions
 import fr.acinq.eclair.blockchain.fee.FeeratePerKw
 import fr.acinq.eclair.io.UnknownMessageReceived
-import fr.acinq.eclair.wire.internal.channel.version3.HCProtocolCodecs
+import fr.acinq.eclair.wire.internal.channel.version3.FCProtocolCodecs
 import fr.acinq.fc.app.Tools.DuplicateHandler
 import fr.acinq.fc.app.db.PreimagesDb
 import fr.acinq.fc.app.network.PreimageBroadcastCatcher._
@@ -93,7 +93,7 @@ class PreimageBroadcastCatcher(preimagesDb: PreimagesDb, kit: Kit, vals: Vals) e
       } sender ! signedTx.tx.txid
 
     case msg: UnknownMessageReceived =>
-      Tuple3(HCProtocolCodecs decodeHostedMessage msg.message, FC.remoteNode2Connection get msg.nodeId, preimagesDb) match {
+      Tuple3(FCProtocolCodecs decodeHostedMessage msg.message, FC.remoteNode2Connection get msg.nodeId, preimagesDb) match {
         case (Attempt.Successful(query: QueryPreimages), Some(wrap), db) if ipAntiSpam(wrap.remoteIp) < vals.maxPreimageRequestsPerIpPerMinute =>
           val foundPreimages = query.hashes.take(10).flatMap(db.findByHash)
           wrap sendHostedChannelMsg ReplyPreimages(foundPreimages)
