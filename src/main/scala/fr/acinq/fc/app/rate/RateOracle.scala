@@ -22,7 +22,12 @@ object RateOracle {
   var maxRate: Option[MilliSatoshi] = None
   var maxLastUpdate: Option[LocalDateTime] = None
 
-  val WINDOW_SIZE = 180.seconds
+  /** We save the maximum rate for some time from current time. User has
+   * an oppurtinity to use the highest rate from that moving window.
+   * TODO: that window should be smaller when we implement rate negotiation
+   * procedure in the FC protocol.
+    */
+  val WINDOW_SIZE = 48.hours
 
   val rateLock = new ReentrantReadWriteLock()
   val rateWrite = rateLock.writeLock()
