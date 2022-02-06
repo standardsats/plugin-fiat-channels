@@ -854,8 +854,8 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
     } else {
       val commitments1 = clearOrigin(commits1, data.commitments)
       context.system.eventStream publish AvailableBalanceChanged(self, channelId, shortChannelId, commitments = commitments1)
+      // delta < 0 => client balance increased
       val delta = data.commitments.lastCrossSignedState.remoteBalanceMsat - commits1.lastCrossSignedState.remoteBalanceMsat
-      println(delta)
       context.system.eventStream publish FCHedgeLiability(delta, commits1.lastCrossSignedState.rate)
       stay StoringAndUsing data.copy(commitments = commitments1) RelayingRemoteUpdates data.commitments SendingHosted commits1.lastCrossSignedState.stateUpdate
     }
