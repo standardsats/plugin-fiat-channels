@@ -24,43 +24,31 @@ import scala.concurrent.ExecutionContext.Implicits.global
 //ecb stuff
 import scala.xml.XML
 
-case class CentralBankRate(rate: Double)
+case class CentralBankRate(rate: Double, ticker: String, asset: String)
 
 trait CentralBankSource {
   def askRates: Future[CentralBankRate]
 }
 
-class EcbSource(predicate: Double => Double, ticker: String = "USD", implicit val system: ActorSystem) extends CentralBankSource {
+class EcbSource(ticker: String = "USD", implicit val system: ActorSystem) extends CentralBankSource {
   val http = Http(system)
   val ecbUri = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml"
 
   def askRates: Future[CentralBankRate] = {
+    if(ticker == "EUR")
+      return Future(CentralBankRate(1, ticker, "EUR"))
+
     val xml = XML.load(ecbUri)
-    println(xml.getClass())
-    println("Number of elements is " + (xml \\ "Cube").length)
-    //xml.foreach(println(_))
-
-    val firstTitle = (xml \\ "Cube" \ "currency").text
-    //println(firstTitle)
-    //(xml \ "Cube").foreach(println(_.attributes.get("foo").getOrElse("N/A")))
-    //for (a <- xml.attributes) println(s"key: ${a.key}, value: ${a.value}")
-    //println(xml.attributes.asAttrMap)
-
-    for (n <- xml.child) println(n.attributes)
-
-    val strings = for {
-      e <- xml.child
-      if e.label == "USD"
-    } yield e.text
-
-    println(strings)
-    /*val definitionMap = (Map[String, String]() /: (xml \ "Cube")) { (map , defNode) =>
-      val word = (defNode \ "Cube").text.toString()
-      val description = (defNode \ "currency").text.toString()
-      map + (word -> description)
+    val cubes = (xml \\ "Cube")
+    val xml_rate = for {
+      cube <- cubes
+      if (cube \ "@currency").text == ticker
+    } yield (cube \ "@rate").text
+    var rate: Double = 0
+    if (xml_rate.size > 0) {
+      rate = xml_rate(0).toDouble
     }
-    println(definitionMap)*/
-    //val temp = (xml \\ "Cube" \\ "time" \ "@temp")
-    Future(CentralBankRate(1.0))
+
+    Future(CentralBankRate(rate, ticker, "EUR"))
   }
 }

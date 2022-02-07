@@ -120,7 +120,7 @@ class FC extends Plugin with RouteProvider {
     preimageRef = eclairKit.system actorOf Props(classOf[PreimageBroadcastCatcher], new PreimagesDb(config.db), eclairKit, config.vals)
     syncRef = eclairKit.system actorOf Props(classOf[HostedSync], eclairKit, new HostedUpdatesDb(config.db), config.vals.phcConfig)
     rateOracleRef = eclairKit.system actorOf Props(classOf[RateOracle], eclairKit, new BinanceSourceModified(x => x, "BTCEUR", implicitly))
-    ecbOracleRef = eclairKit.system actorOf Props(classOf[CentralBankOracle], eclairKit, new EcbSource(x => x, "BTCEUR", implicitly))
+    ecbOracleRef = eclairKit.system actorOf Props(classOf[CentralBankOracle], eclairKit, new EcbSource("USD", implicitly))
     workerRef = eclairKit.system actorOf Props(classOf[Worker], eclairKit, syncRef, rateOracleRef, preimageRef, channelsDb, config)
     kit = eclairKit
   }

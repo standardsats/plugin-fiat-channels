@@ -22,7 +22,7 @@ import fr.acinq.fc.app._
 import fr.acinq.fc.app.db.Blocking.{span, timeout}
 import fr.acinq.fc.app.db.HostedChannelsDb
 import fr.acinq.fc.app.network.{HostedSync, OperationalData, PHC, PreimageBroadcastCatcher}
-import fr.acinq.fc.app.rate.RateOracle
+import fr.acinq.fc.app.rate.{CentralBankOracle, RateOracle}
 import scodec.bits.ByteVector
 
 import java.util.UUID
@@ -856,7 +856,10 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
       context.system.eventStream publish AvailableBalanceChanged(self, channelId, shortChannelId, commitments = commitments1)
       // delta < 0 => client balance increased
       val delta = data.commitments.lastCrossSignedState.remoteBalanceMsat - commits1.lastCrossSignedState.remoteBalanceMsat
-      context.system.eventStream publish FCHedgeLiability(delta, commits1.lastCrossSignedState.rate)
+      val eurPrice = CentralBankOracle.getCurrentRate()
+      // Warning: crossRate is relevant for EUR channels only
+      val crossRate = (math round (commits1.lastCrossSignedState.rate.toLong.toDouble / eurPrice)).msat
+      context.system.eventStream publish FCHedgeLiability(delta, crossRate)
       stay StoringAndUsing data.copy(commitments = commitments1) RelayingRemoteUpdates data.commitments SendingHosted commits1.lastCrossSignedState.stateUpdate
     }
   }
