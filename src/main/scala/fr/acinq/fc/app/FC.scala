@@ -23,7 +23,7 @@ import fr.acinq.fc.app.channel._
 import fr.acinq.fc.app.db.{Blocking, HostedChannelsDb, HostedUpdatesDb, PreimagesDb}
 import fr.acinq.fc.app.FC._
 import fr.acinq.fc.app.network.{HostedSync, OperationalData, PHC, PreimageBroadcastCatcher}
-import fr.acinq.fc.app.rate.{BinanceSourceModified, RateOracle}
+import fr.acinq.fc.app.rate.{BinanceSourceModified, CentralBankOracle, EcbSource, RateOracle}
 import scodec.bits.ByteVector
 
 import scala.collection.mutable
@@ -105,6 +105,7 @@ class FC extends Plugin with RouteProvider {
   var workerRef: ActorRef = _
   var syncRef: ActorRef = _
   var rateOracleRef: ActorRef = _
+  var ecbOracleRef: ActorRef = _
   var config: Config = _
   var kit: Kit = _
 
@@ -119,6 +120,7 @@ class FC extends Plugin with RouteProvider {
     preimageRef = eclairKit.system actorOf Props(classOf[PreimageBroadcastCatcher], new PreimagesDb(config.db), eclairKit, config.vals)
     syncRef = eclairKit.system actorOf Props(classOf[HostedSync], eclairKit, new HostedUpdatesDb(config.db), config.vals.phcConfig)
     rateOracleRef = eclairKit.system actorOf Props(classOf[RateOracle], eclairKit, new BinanceSourceModified(x => x, "BTCEUR", implicitly))
+    ecbOracleRef = eclairKit.system actorOf Props(classOf[CentralBankOracle], eclairKit, new EcbSource(x => x, "BTCEUR", implicitly))
     workerRef = eclairKit.system actorOf Props(classOf[Worker], eclairKit, syncRef, rateOracleRef, preimageRef, channelsDb, config)
     kit = eclairKit
   }

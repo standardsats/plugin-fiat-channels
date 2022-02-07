@@ -271,10 +271,6 @@
           <artifactId>scala-reflect</artifactId>
           <groupId>org.scala-lang</groupId>
         </exclusion>
-        <exclusion>
-          <artifactId>scala-xml_2.13</artifactId>
-          <groupId>org.scala-lang.modules</groupId>
-        </exclusion>
       </exclusions>
     </dependency>
     <dependency>
