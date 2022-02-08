@@ -856,10 +856,13 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
       context.system.eventStream publish AvailableBalanceChanged(self, channelId, shortChannelId, commitments = commitments1)
       // delta < 0 => client balance increased
       val delta = data.commitments.lastCrossSignedState.remoteBalanceMsat - commits1.lastCrossSignedState.remoteBalanceMsat
-      val eurPrice = CentralBankOracle.getCurrentRate()
-      // Warning: crossRate is relevant for EUR channels only
-      val crossRate = (math round (commits1.lastCrossSignedState.rate.toLong.toDouble / eurPrice)).msat
-      context.system.eventStream publish FCHedgeLiability(delta, crossRate)
+      // delta == 0 means rate adjustment
+      if(delta != 0.msat) {
+        val eurPrice = CentralBankOracle.getCurrentRate()
+        // Warning: crossRate is relevant for EUR channels only
+        val crossRate = (math round (commits1.lastCrossSignedState.rate.toLong.toDouble / eurPrice)).msat
+        context.system.eventStream publish FCHedgeLiability(delta, crossRate)
+      }
       stay StoringAndUsing data.copy(commitments = commitments1) RelayingRemoteUpdates data.commitments SendingHosted commits1.lastCrossSignedState.stateUpdate
     }
   }
