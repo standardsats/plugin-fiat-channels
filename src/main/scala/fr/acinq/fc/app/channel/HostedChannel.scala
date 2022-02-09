@@ -854,14 +854,21 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
     } else {
       val commitments1 = clearOrigin(commits1, data.commitments)
       context.system.eventStream publish AvailableBalanceChanged(self, channelId, shortChannelId, commitments = commitments1)
-      // delta < 0 => client balance increased
-      val delta = data.commitments.lastCrossSignedState.remoteBalanceMsat - commits1.lastCrossSignedState.remoteBalanceMsat
+      // delta > 0 => client balance increased
+      val delta = commits1.lastCrossSignedState.remoteBalanceMsat - data.commitments.lastCrossSignedState.remoteBalanceMsat
       // delta == 0 means rate adjustment
       if(delta != 0.msat) {
-        val eurPrice = CentralBankOracle.getCurrentRate()
-        // Warning: crossRate is relevant for EUR channels only
-        val crossRate = (math round (commits1.lastCrossSignedState.rate.toLong.toDouble / eurPrice)).msat
-        context.system.eventStream publish FCHedgeLiability(delta, crossRate)
+        RateOracle.getCurrentRate() match {
+          case Some(oracleRate) => {
+              val eurPrice = CentralBankOracle.getCurrentRate()
+              // Warning: crossRate is relevant for EUR channels only
+              val crossRate = (math round (oracleRate.toLong / eurPrice)).msat
+              context.system.eventStream publish FCHedgeLiability(delta, crossRate)
+          }
+          case None =>
+            log.error("Oracle price is not defined, not sending it to the client yet")
+            stay
+        }
       }
       stay StoringAndUsing data.copy(commitments = commitments1) RelayingRemoteUpdates data.commitments SendingHosted commits1.lastCrossSignedState.stateUpdate
     }
