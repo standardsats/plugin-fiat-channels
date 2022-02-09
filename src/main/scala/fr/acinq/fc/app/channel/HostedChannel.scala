@@ -831,7 +831,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
           RateOracle.getMaxRate() match {
             case Some(maxRate) =>
               if (maxRate < remoteSU.rate) {
-                log.info(s"Margin rate is hiher than expected. Our max rate: ${maxRate}, client wants: ${remoteSU.rate}")
+                log.info(s"Margin rate is higher than expected. Our max rate: ${maxRate}, client wants: ${remoteSU.rate}")
                 val (data1, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_INVALID_ORACLE_PRICE)
                 goto(CLOSED) StoringAndUsing data1 SendingHasChannelId error
               } else {

@@ -111,6 +111,7 @@ case class HC_DATA_ESTABLISHED(commitments: HostedCommitments,
       .modify(_.commitments.localSpec.toRemote).usingIf(!commitments.lastCrossSignedState.isHost)(_ + resize.newCapacity - commitments.capacity)
       .modify(_.commitments.localSpec.toLocal).usingIf(commitments.lastCrossSignedState.isHost)(_ + resize.newCapacity - commitments.capacity)
       .modify(_.resizeProposal).setTo(None)
+      .modify(_.lastOracleState).setTo(None)
 
   def withMargin(margin: MarginChannel): HC_DATA_ESTABLISHED =
     me.modify(_.commitments.lastCrossSignedState.initHostedChannel.maxHtlcValueInFlightMsat).setTo(margin.newCapacityMsatU64)
@@ -121,6 +122,7 @@ case class HC_DATA_ESTABLISHED(commitments: HostedCommitments,
       .modify(_.commitments.localSpec.toLocal).usingIf(commitments.lastCrossSignedState.isHost)(_ => margin.newCapacity - margin.newRemoteBalance(commitments.lastCrossSignedState))
       .modify(_.commitments.lastCrossSignedState.rate).setTo(margin.newRate)
       .modify(_.marginProposal).setTo(None)
+      .modify(_.lastOracleState).setTo(None)
 }
 
 object HostedCommitments {
