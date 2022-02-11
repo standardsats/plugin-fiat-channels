@@ -291,6 +291,6 @@ case class FCSuspended(nodeId: PublicKey, isHost: Boolean, isLocal: Boolean, des
   override def senderEntity: String = "FC"
 }
 
-case class FCHedgeLiability(amount: MilliSatoshi, rate: MilliSatoshi) extends fr.acinq.alarmbot.ExternalHedgeMessage {
+case class FCHedgeLiability(channel: String, amount: MilliSatoshi, rate: MilliSatoshi) extends fr.acinq.alarmbot.ExternalHedgeMessage {
   override def senderEntity: String = "FC"
 }

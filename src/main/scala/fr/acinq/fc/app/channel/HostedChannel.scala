@@ -863,7 +863,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
               val eurPrice = CentralBankOracle.getCurrentRate()
               // Warning: crossRate is relevant for EUR channels only
               val crossRate = (math round (oracleRate.toLong / eurPrice)).msat
-              context.system.eventStream publish FCHedgeLiability(delta, crossRate)
+              context.system.eventStream publish FCHedgeLiability(shortChannelId.toString(), delta, crossRate)
           }
           case None =>
             log.error("Oracle price is not defined, not sending it to the client yet")
