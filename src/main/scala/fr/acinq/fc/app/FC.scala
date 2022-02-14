@@ -187,6 +187,11 @@ class FC extends Plugin with RouteProvider {
       }
     }
 
+    val allChannels: Route = postRequest("fc-all") { implicit t =>
+      val futureResponse = (workerRef ? HC_CMD_GET_ALL_CHANNELS()).mapTo[HCCommandResponse]
+      complete(futureResponse)
+    }
+
     val findByRemoteId: Route = postRequest("fc-findbyremoteid") { implicit t =>
       formFields(nodeIdFormParam) { remoteNodeId =>
         completeCommand(HC_CMD_GET_INFO(remoteNodeId))
@@ -262,7 +267,7 @@ class FC extends Plugin with RouteProvider {
       complete(channelsDb.listHotChannels)
     }
 
-    invoke ~ externalFulfill ~ findByRemoteId ~ overridePropose ~ overrideAccept ~
+    invoke ~ externalFulfill ~ allChannels ~ findByRemoteId ~ overridePropose ~ overrideAccept ~
       makePublic ~ makePrivate ~ resize ~ suspend ~ verifyRemoteState ~ restoreFromRemoteState ~
       broadcastPreimages ~ hotChannels
   }

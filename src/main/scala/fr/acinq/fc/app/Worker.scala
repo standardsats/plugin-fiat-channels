@@ -1,7 +1,7 @@
 package fr.acinq.fc.app
 
 import akka.actor.{Actor, ActorRef, Props, Terminated}
-import akka.pattern.ask
+import akka.pattern.{ask, pipe}
 import com.google.common.collect.HashBiMap
 import com.google.common.net.HostAndPort
 import fr.acinq.bitcoin.ByteVector32
@@ -21,6 +21,7 @@ import scodec.Attempt
 
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
 import scala.concurrent.duration._
 
 
@@ -132,6 +133,13 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, r
         case None => restore(sender ! notFound, _ |> cmd)(cmd.remoteNodeId)
         case Some(channelRef) => channelRef forward cmd
       }
+
+    case cmd: HC_CMD_GET_ALL_CHANNELS =>
+      val resMap = scala.collection.mutable.Map.empty[PublicKey, Future[CMDResInfo]]
+      inMemoryHostedChannels.forEach((key, ref) => resMap(key) = (ref ? cmd).mapTo[CMDResInfo])
+
+      val collected = Future.traverse(resMap.toList)((value) => value._2.map(x => (value._1.toString(), x))).map(xs => CMDAllInfo(Map.from(xs)))
+      collected.pipeTo(sender())
 
     case Terminated(channelRef) =>
       inMemoryHostedChannels.inverse.remove(channelRef)
