@@ -14,14 +14,14 @@ import net.ceedubs.ficus.Ficus._
 import net.ceedubs.ficus.readers.ArbitraryTypeReader._
 import net.ceedubs.ficus.readers.ValueReader
 import org.postgresql.util.PSQLException
-import scodec.bits.ByteVector
+import scodec.bits.{BitVector, ByteVector}
 import slick.jdbc.PostgresProfile
 
 import java.io.{ByteArrayInputStream, File}
 import java.nio.ByteOrder
 import java.nio.file.{Files, Paths}
 import scala.util.Try
-
+import scodec.codecs._
 
 object Tools {
   def none: PartialFunction[Any, Unit] = { case _ => }
@@ -47,18 +47,24 @@ object Tools {
 
   // HC ids derivation
 
-  def hostedNodesCombined(pubkey1: ByteVector, pubkey2: ByteVector): ByteVector = {
+  def hostedNodesCombined(pubkey1: ByteVector, pubkey2: ByteVector, ticker: Option[String]): ByteVector = {
     val pubkey1First: Boolean = LexicographicalOrdering.isLessThan(pubkey1, pubkey2)
-    if (pubkey1First) pubkey1 ++ pubkey2 else pubkey2 ++ pubkey1
+    val combinedPks = if (pubkey1First) pubkey1 ++ pubkey2 else pubkey2 ++ pubkey1
+    ticker match {
+      case Some(value) =>
+        val ticker_bytes = utf8.encode(value).toOption.getOrElse(BitVector.empty).toByteVector
+        combinedPks ++ ticker_bytes
+      case None => combinedPks
+    }
   }
 
-  def hostedChanId(pubkey1: ByteVector, pubkey2: ByteVector): ByteVector32 = {
-    val nodesCombined = hostedNodesCombined(pubkey1, pubkey2)
+  def hostedChanId(pubkey1: ByteVector, pubkey2: ByteVector, ticker: Option[String]): ByteVector32 = {
+    val nodesCombined = hostedNodesCombined(pubkey1, pubkey2, ticker)
     Crypto.sha256(nodesCombined)
   }
 
-  def hostedShortChanId(pubkey1: ByteVector, pubkey2: ByteVector): ShortChannelId = {
-    val stream = new ByteArrayInputStream(hostedNodesCombined(pubkey1, pubkey2).toArray)
+  def hostedShortChanId(pubkey1: ByteVector, pubkey2: ByteVector, ticker: Option[String]): ShortChannelId = {
+    val stream = new ByteArrayInputStream(hostedNodesCombined(pubkey1, pubkey2, ticker).toArray)
     def getChunk: Long = Protocol.uint64(stream, ByteOrder.BIG_ENDIAN)
     ShortChannelId(List.fill(8)(getChunk).sum)
   }

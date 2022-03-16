@@ -35,11 +35,11 @@ object HostedChannel {
   case class SendAnnouncements(force: Boolean)
 }
 
-class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannelsDb, hostedSync: ActorRef, cfg: Config) extends FSMDiagnosticActorLogging[ChannelState, HostedData] {
+class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Option[String], channelsDb: HostedChannelsDb, hostedSync: ActorRef, cfg: Config) extends FSMDiagnosticActorLogging[ChannelState, HostedData] {
 
-  lazy val channelId: ByteVector32 = Tools.hostedChanId(kit.nodeParams.nodeId.value, remoteNodeId.value)
+  lazy val channelId: ByteVector32 = Tools.hostedChanId(kit.nodeParams.nodeId.value, remoteNodeId.value, ticker)
 
-  lazy val shortChannelId: ShortChannelId = Tools.hostedShortChanId(kit.nodeParams.nodeId.value, remoteNodeId.value)
+  lazy val shortChannelId: ShortChannelId = Tools.hostedShortChanId(kit.nodeParams.nodeId.value, remoteNodeId.value, ticker)
 
   startTimerWithFixedDelay("SendAnnouncements", HostedChannel.SendAnnouncements(force = false), PHC.tickAnnounceThreshold)
 
