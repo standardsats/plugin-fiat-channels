@@ -212,7 +212,8 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
         val localUpdatesLeftover = data2.commitments.nextLocalUpdates drop localUpdatesAcked.toInt
 
         val commits1 = data2.commitments.copy(nextLocalUpdates = localUpdatesAccountedByRemote, nextRemoteUpdates = remoteUpdatesAccountedByLocal)
-        val restoredLCSS = commits1.nextLocalUnsignedLCSS(remoteLCSS.blockDay).copy(localSigOfRemote = remoteLCSS.remoteSigOfLocal, remoteSigOfLocal = remoteLCSS.localSigOfRemote)
+        val restoredLCSS = commits1.nextLocalUnsignedLCSS(remoteLCSS.blockDay).copy(localSigOfRemote = remoteLCSS.remoteSigOfLocal,
+          remoteSigOfLocal = remoteLCSS.localSigOfRemote, rate = remoteLCSS.rate)
 
         if (restoredLCSS.reverse == remoteLCSS) {
           val retransmit = Vector(restoredLCSS) ++ data2.resizeProposal ++ data2.marginProposal
