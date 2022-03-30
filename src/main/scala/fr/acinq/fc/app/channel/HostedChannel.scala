@@ -310,7 +310,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
           val newRate = if (oracleRate == 0.msat) data.commitments.lastCrossSignedState.rate else oracleRate
           val commitments = data.marginProposal.map(data.withMargin).getOrElse(data.resizeProposal.map(data.withResize).getOrElse(data)).commitments
           val nextLocalLCSS = commitments.nextLocalUnsignedLCSSWithRate(log, currentBlockDay, newRate)
-          if (commitments.validateFiatSpend(newRate)) {
+          if (commitments.validateFiatSpend(log, newRate)) {
             log.info(s"Next lastOracleState: ${Some(nextLocalLCSS.rate)}")
             stay StoringAndUsing data.copy(lastOracleState = Some(nextLocalLCSS.rate)) SendingHosted nextLocalLCSS.withLocalSigOfRemote(kit.nodeParams.privateKey).stateUpdate
           } else {
