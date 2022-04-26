@@ -1,10 +1,10 @@
 package fr.acinq.fc.app
 
-import fr.acinq.bitcoin.Crypto.PrivateKey
+import fr.acinq.bitcoin.scalacompat.Crypto.PrivateKey
 import fr.acinq.eclair._
 import slick.jdbc.PostgresProfile.api._
 import fr.acinq.eclair.wire.protocol.LightningMessageCodecs._
-import fr.acinq.bitcoin.{Block, ByteVector32, ByteVector64, Crypto}
+import fr.acinq.bitcoin.scalacompat.{Block, ByteVector32, ByteVector64, Crypto}
 import fr.acinq.eclair.router.Announcements
 import fr.acinq.fc.app.Tools.DuplicateHandler
 import fr.acinq.fc.app.db.{Blocking, HostedUpdatesDb, PreimagesDb, Updates}

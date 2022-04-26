@@ -4,7 +4,7 @@ import fr.acinq.eclair._
 import fr.acinq.eclair.channel._
 import fr.acinq.eclair.transactions.DirectedHtlc
 import fr.acinq.eclair.blockchain.CurrentBlockHeight
-import fr.acinq.bitcoin.{ByteVector32, ByteVector64}
+import fr.acinq.bitcoin.scalacompat.{ByteVector32, ByteVector64}
 import fr.acinq.eclair.wire.protocol.{ChannelUpdate, UpdateFailHtlc, UpdateFulfillHtlc}
 import fr.acinq.fc.app.{HCTestUtils, InvokeHostedChannel, LastCrossSignedState, StateOverride, StateUpdate, Worker}
 import org.scalatest.funsuite.FixtureAnyFunSuiteLike

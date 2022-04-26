@@ -1,21 +1,20 @@
 package fr.acinq.fc.app
 
+import akka.pattern._
 import akka.actor.{Actor, ActorRef, Props, Terminated}
-import akka.pattern.{ask, pipe}
 import com.google.common.collect.HashBiMap
 import com.google.common.net.HostAndPort
-import fr.acinq.bitcoin.ByteVector32
-import fr.acinq.bitcoin.Crypto.PublicKey
+import fr.acinq.bitcoin.scalacompat.ByteVector32
+import fr.acinq.bitcoin.scalacompat.Crypto.PublicKey
 import fr.acinq.eclair
 import fr.acinq.eclair.io._
-import fr.acinq.eclair.router.{Router, SyncProgress}
+import fr.acinq.eclair.router.{Announcements, SyncProgress, Router}
 import fr.acinq.eclair.wire.internal.channel.version3.FCProtocolCodecs
+import fr.acinq.fc.app.Worker._
 import fr.acinq.fc.app.channel._
 import fr.acinq.fc.app.db.Blocking.timeout
 import fr.acinq.fc.app.db.HostedChannelsDb
 import fr.acinq.fc.app.network.HostedSync
-import fr.acinq.fc.app.Worker._
-import fr.acinq.fc.app.rate.RateOracle
 import grizzled.slf4j.Logging
 import scodec.Attempt
 
@@ -176,10 +175,9 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, r
           data <- routerData
           nodeId <- unconnectedHosts
           nodeAnnouncement <- data.nodes.get(nodeId)
-          sockAddress <- nodeAnnouncement.addresses.headOption.map(_.socketAddress)
-          hostAndPort = HostAndPort.fromParts(sockAddress.getHostString, sockAddress.getPort)
-          _ = logger.info(s"PLGN FC, trying to reconnect to ${nodeAnnouncement.nodeId}/$hostAndPort")
-        } kit.switchboard ! Peer.Connect(NodeURI(nodeId, hostAndPort), self, isPersistent = false)
+          nodeAddress <- nodeAnnouncement.addresses.headOption
+          _ = logger.info(s"PLGN PHC, trying to reconnect to ${nodeAnnouncement.nodeId}/$nodeAddress")
+        } kit.switchboard ! Peer.Connect(NodeURI(nodeId, nodeAddress), self, isPersistent = false)
       }
   }
 

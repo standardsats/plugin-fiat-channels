@@ -1,7 +1,7 @@
 package fr.acinq.fc.app
 
 import fr.acinq.eclair._
-import fr.acinq.bitcoin.{Block, ByteVector32, ByteVector64, Crypto, Satoshi}
+import fr.acinq.bitcoin.scalacompat.{Block, ByteVector32, ByteVector64, Crypto, Satoshi}
 import fr.acinq.eclair.transactions.{CommitmentSpec, IncomingHtlc, OutgoingHtlc}
 import fr.acinq.eclair.wire.protocol.{ChannelUpdate, Error, UpdateAddHtlc, UpdateFailHtlc}
 import fr.acinq.eclair.wire.internal.channel.version3.{FCProtocolCodecs, FiatChannelCodecs}

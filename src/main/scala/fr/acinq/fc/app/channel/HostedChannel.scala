@@ -1,10 +1,10 @@
 package fr.acinq.fc.app.channel
 
-import akka.actor.{ActorRef, FSM}
-import akka.pattern.{ask, pipe}
+import akka.pattern._
+import akka.actor.{Actor, ActorRef, ExtendedActorSystem, FSM, PoisonPill, Props, Terminated}
 import com.softwaremill.quicklens._
-import fr.acinq.bitcoin.Crypto.PublicKey
-import fr.acinq.bitcoin.{ByteVector32, ByteVector64, Crypto, SatoshiLong}
+import fr.acinq.bitcoin.scalacompat.Crypto.PublicKey
+import fr.acinq.bitcoin.scalacompat.{ByteVector32, ByteVector64, Crypto, SatoshiLong}
 import fr.acinq.eclair._
 import fr.acinq.eclair.blockchain.CurrentBlockHeight
 import fr.acinq.eclair.blockchain.fee.FeeratePerKw
@@ -101,7 +101,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
 
     case Event(remoteInvoke: InvokeHostedChannel, HC_NOTHING) =>
       val isWrongChain = kit.nodeParams.chainHash != remoteInvoke.chainHash
-      val isValidFinalScriptPubkey = Helpers.Closing.isValidFinalScriptPubkey(remoteInvoke.refundScriptPubKey, allowAnySegwit = false)
+      val isValidFinalScriptPubkey =  Helpers.Closing.MutualClose.isValidFinalScriptPubkey(remoteInvoke.refundScriptPubKey, allowAnySegwit = false)
       if (isWrongChain) stop(FSM.Normal) SendingHasChannelId Error(channelId, InvalidChainHash(channelId, kit.nodeParams.chainHash, remoteInvoke.chainHash).getMessage)
       else if (!isValidFinalScriptPubkey) stop(FSM.Normal) SendingHasChannelId Error(channelId, InvalidFinalScript(channelId).getMessage)
       else {
@@ -468,9 +468,9 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
     case Event(_: HC_CMD_GET_INFO, data: HC_DATA_ESTABLISHED) => stay replying CMDResInfo(stateName, data, data.commitments.nextLocalSpec)
     case Event(_: HC_CMD_GET_ALL_CHANNELS, data: HC_DATA_ESTABLISHED) => stay replying CMDResInfo(stateName, data, data.commitments.nextLocalSpec)
 
-    case Event(cmd: CMD_GETINFO, _) =>
-      // We get this for example when user issues "channels" API command, must reply with something
-      replyToCommand(RES_GETINFO(remoteNodeId, channelId, stateName, data = null), cmd)
+    case Event(cmd: CMD_GET_CHANNEL_INFO, _) =>
+      val msg = new IllegalArgumentException("Non-standard channel")
+      replyToCommand(RES_FAILURE(cmd, msg), cmd)
       stay
 
     case Event(cmd: HC_CMD_RESIZE, data: HC_DATA_ESTABLISHED) =>

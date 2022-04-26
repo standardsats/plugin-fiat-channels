@@ -1,8 +1,8 @@
 package fr.acinq.fc.app
 
 import com.typesafe.config.{ConfigFactory, Config => TypesafeConfig}
-import fr.acinq.bitcoin.Crypto.PublicKey
-import fr.acinq.bitcoin.{ByteVector32, Crypto, LexicographicalOrdering, Protocol}
+import fr.acinq.bitcoin.scalacompat.Crypto.PublicKey
+import fr.acinq.bitcoin.scalacompat.{ByteVector32, Crypto, LexicographicalOrdering, Protocol}
 import fr.acinq.eclair._
 import fr.acinq.eclair.io.Peer.OutgoingMessage
 import fr.acinq.eclair.io.PeerConnected
@@ -78,7 +78,7 @@ case class PeerConnectedWrapNormal(info: PeerConnected) extends PeerConnectedWra
   def sendHostedChannelMsg(message: HostedChannelMessage): Unit = me sendUnknownMsg FCProtocolCodecs.toUnknownHostedMessage(message)
   def sendRoutingMsg(message: AnnouncementMessage): Unit = me sendUnknownMsg FCProtocolCodecs.toUnknownAnnounceMessage(message, isGossip = true)
   def sendUnknownMsg(message: UnknownMessage): Unit = info.peer ! OutgoingMessage(message, info.connectionInfo.peerConnection)
-  lazy val remoteIp: Array[Byte] = info.connectionInfo.address.getAddress.getAddress
+  lazy val remoteIp: Array[Byte] = info.connectionInfo.address.host.getBytes
 }
 
 
