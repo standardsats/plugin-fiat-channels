@@ -204,15 +204,7 @@ case class HostedCommitments(localNodeId: PublicKey, remoteNodeId: PublicKey, ch
     nextLocalUnsignedLCSS(blockDay).copy(rate = avgRate)
   }
 
-  def validateFiatSpend(log: LoggingAdapter, newRate: MilliSatoshi): Boolean = {
-    if (lastCrossSignedState.rate.toLong <= 0) {
-      log.error(s"validateFiatSpend: last cross signed state is negative or zero: ${lastCrossSignedState.rate.toLong}")
-      return false
-    }
-    if (newRate.toLong <= 0) {
-      log.error(s"validateFiatSpend: new rate is negative or zero: ${lastCrossSignedState.rate.toLong}")
-      return false
-    }
+  def validateFiatSpend(newRate: MilliSatoshi): Boolean = {
     val f1 = 1.0 / lastCrossSignedState.rate.toLong.toDouble
     val f2 = 1.0 / newRate.toLong.toDouble
     val capacity = lastCrossSignedState.initHostedChannel.channelCapacityMsat
