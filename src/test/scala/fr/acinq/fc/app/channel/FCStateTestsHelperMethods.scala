@@ -16,6 +16,7 @@ import fr.acinq.eclair.router.Router.ChannelHop
 import fr.acinq.eclair.wire.protocol.PaymentOnion.createSinglePartPayload
 import fr.acinq.eclair.wire.protocol.{AnnouncementMessage, ChannelUpdate, HasChannelId, UnknownMessage, UpdateAddHtlc, UpdateFulfillHtlc}
 import fr.acinq.eclair.{BlockHeight, CltvExpiryDelta, Kit, MilliSatoshi, TestConstants, randomBytes32}
+import fr.acinq.fc.app.FC.USD_TICKER
 import fr.acinq.fc.app.db.HostedChannelsDb
 import fr.acinq.fc.app._
 import org.scalatest.{FixtureTestSuite, ParallelTestExecution}
@@ -69,8 +70,9 @@ trait FCStateTestsHelperMethods extends TestKitBase with FixtureTestSuite with P
     val bobPeerConnected = PeerConnected(alice2bob.ref, bobKit.nodeParams.nodeId, ConnectionInfo(new InetSocketAddress("127.0.0.3", 9001), TestProbe().ref, localInit = null, remoteInit = null))
     FC.remoteNode2Connection addOne aliceKit.nodeParams.nodeId -> PeerConnectedWrapTest(alicePeerConnected)
     FC.remoteNode2Connection addOne bobKit.nodeParams.nodeId -> PeerConnectedWrapTest(bobPeerConnected)
-    val alice: TestFSMRef[ChannelState, HostedData, HostedChannel] = TestFSMRef(new HostedChannel(aliceKit, bobKit.nodeParams.nodeId, new HostedChannelsDb(aliceDB), aliceSync.ref, HCTestUtils.config))
-    val bob: TestFSMRef[ChannelState, HostedData, HostedChannel] = TestFSMRef(new HostedChannel(bobKit, aliceKit.nodeParams.nodeId, new HostedChannelsDb(bobDB), bobSync.ref, HCTestUtils.config))
+    val ticker = USD_TICKER
+    val alice: TestFSMRef[ChannelState, HostedData, HostedChannel] = TestFSMRef(new HostedChannel(aliceKit, bobKit.nodeParams.nodeId, ticker, new HostedChannelsDb(aliceDB), aliceSync.ref, HCTestUtils.config))
+    val bob: TestFSMRef[ChannelState, HostedData, HostedChannel] = TestFSMRef(new HostedChannel(bobKit, aliceKit.nodeParams.nodeId, ticker, new HostedChannelsDb(bobDB), bobSync.ref, HCTestUtils.config))
 
     alice2bob.watch(alice)
     bob2alice.watch(bob)
@@ -84,7 +86,7 @@ trait FCStateTestsHelperMethods extends TestKitBase with FixtureTestSuite with P
     alice ! Worker.HCPeerConnected
     awaitCond(bob.stateName == SYNCING)
     awaitCond(alice.stateName == SYNCING)
-    bob ! HC_CMD_LOCAL_INVOKE(aliceKit.nodeParams.nodeId, Bob.channelParams.defaultFinalScriptPubKey, ByteVector32.Zeroes)
+    bob ! HC_CMD_LOCAL_INVOKE(aliceKit.nodeParams.nodeId, Bob.channelParams.defaultFinalScriptPubKey, ByteVector32.Zeroes, USD_TICKER)
     awaitCond(bob.stateData.isInstanceOf[HC_DATA_CLIENT_WAIT_HOST_INIT])
     alice ! bob2alice.expectMsgType[InvokeHostedChannel]
     awaitCond(alice.stateData.isInstanceOf[HC_DATA_HOST_WAIT_CLIENT_STATE_UPDATE])

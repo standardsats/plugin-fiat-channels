@@ -35,11 +35,11 @@ object HostedChannel {
   case class SendAnnouncements(force: Boolean)
 }
 
-class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannelsDb, hostedSync: ActorRef, cfg: Config) extends FSMDiagnosticActorLogging[ChannelState, HostedData] {
+class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: String, channelsDb: HostedChannelsDb, hostedSync: ActorRef, cfg: Config) extends FSMDiagnosticActorLogging[ChannelState, HostedData] {
 
-  lazy val channelId: ByteVector32 = Tools.hostedChanId(kit.nodeParams.nodeId.value, remoteNodeId.value)
+  lazy val channelId: ByteVector32 = Tools.hostedChanId(kit.nodeParams.nodeId.value, remoteNodeId.value, ticker)
 
-  lazy val shortChannelId: ShortChannelId = Tools.hostedShortChanId(kit.nodeParams.nodeId.value, remoteNodeId.value)
+  lazy val shortChannelId: ShortChannelId = Tools.hostedShortChanId(kit.nodeParams.nodeId.value, remoteNodeId.value, ticker)
 
   startTimerWithFixedDelay("SendAnnouncements", HostedChannel.SendAnnouncements(force = false), PHC.tickAnnounceThreshold)
 
@@ -69,7 +69,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
       // Client is the one who sends either an Error or InvokeHostedChannel on reconnect
       if (data.localErrors.nonEmpty) goto(CLOSED) SendingHasChannelId data.localErrors.head.error
       else if (data.remoteError.isDefined) goto(CLOSED) SendingHasChannelId Error(channelId, ErrorCodes.ERR_HOSTED_CLOSED_BY_REMOTE_PEER)
-      else goto(SYNCING) SendingHosted InvokeHostedChannel(kit.nodeParams.chainHash, data.commitments.lastCrossSignedState.refundScriptPubKey)
+      else goto(SYNCING) SendingHosted InvokeHostedChannel(kit.nodeParams.chainHash, data.commitments.lastCrossSignedState.refundScriptPubKey, ByteVector.empty, data.commitments.lastCrossSignedState.initHostedChannel.ticker)
 
     case Event(Worker.TickRemoveIdleChannels, HC_NOTHING) => stop(FSM.Normal)
 
@@ -95,8 +95,8 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
   }
 
   when(SYNCING) {
-    case Event(cmd @ HC_CMD_LOCAL_INVOKE(_, scriptPubKey, secret), HC_NOTHING) =>
-      val invokeMsg = InvokeHostedChannel(kit.nodeParams.chainHash, scriptPubKey, secret)
+    case Event(cmd @ HC_CMD_LOCAL_INVOKE(_, scriptPubKey, secret, ticker), HC_NOTHING) =>
+      val invokeMsg = InvokeHostedChannel(kit.nodeParams.chainHash, scriptPubKey, secret, ticker)
       stay using HC_DATA_CLIENT_WAIT_HOST_INIT(scriptPubKey) SendingHosted invokeMsg replying CMDResSuccess(cmd)
 
     case Event(remoteInvoke: InvokeHostedChannel, HC_NOTHING) =>
@@ -106,7 +106,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
       else if (!isValidFinalScriptPubkey) stop(FSM.Normal) SendingHasChannelId Error(channelId, InvalidFinalScript(channelId).getMessage)
       else {
         RateOracle.getCurrentRate() match {
-          case Some(rate) => stay using HC_DATA_HOST_WAIT_CLIENT_STATE_UPDATE(remoteInvoke, rate) SendingHosted cfg.vals.hcParams.initMsg(rate)
+          case Some(rate) => stay using HC_DATA_HOST_WAIT_CLIENT_STATE_UPDATE(remoteInvoke, rate) SendingHosted cfg.vals.hcParams.initMsg(rate, remoteInvoke.ticker)
           case None =>  stop(FSM.Normal) SendingHasChannelId Error(channelId, ErrorCodes.ERR_HOSTED_INVALID_ORACLE_PRICE)
         }
       }
@@ -120,8 +120,9 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
       else stay using HC_DATA_CLIENT_WAIT_HOST_STATE_UPDATE(restoreEmptyData(fullySignedLCSS).commitments) SendingHosted fullySignedLCSS.stateUpdate
 
     case Event(clientSU: StateUpdate, data: HC_DATA_HOST_WAIT_CLIENT_STATE_UPDATE) =>
-      val fullySignedLCSS = LastCrossSignedState(isHost = true, data.invoke.refundScriptPubKey, initHostedChannel = cfg.vals.hcParams.initMsg(data.rate), clientSU.blockDay,
-        localBalanceMsat = cfg.vals.hcParams.initMsg(0L.msat).channelCapacityMsat, remoteBalanceMsat = MilliSatoshi(0L), rate=data.rate, localUpdates = 0L, remoteUpdates = 0L, incomingHtlcs = Nil,
+      val ticker = data.invoke.ticker;
+      val fullySignedLCSS = LastCrossSignedState(isHost = true, data.invoke.refundScriptPubKey, initHostedChannel = cfg.vals.hcParams.initMsg(data.rate, ticker), clientSU.blockDay,
+        localBalanceMsat = cfg.vals.hcParams.initMsg(0L.msat, ticker).channelCapacityMsat, remoteBalanceMsat = MilliSatoshi(0L), rate=data.rate, localUpdates = 0L, remoteUpdates = 0L, incomingHtlcs = Nil,
         outgoingHtlcs = Nil, remoteSigOfLocal = clientSU.localSigOfRemoteLCSS, localSigOfRemote = ByteVector64.Zeroes).withLocalSigOfRemote(kit.nodeParams.privateKey)
 
       val dh = new DuplicateHandler[HC_DATA_ESTABLISHED] {

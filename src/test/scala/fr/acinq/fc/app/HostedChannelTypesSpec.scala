@@ -1,7 +1,6 @@
 package fr.acinq.fc.app
 
 import java.util.UUID
-
 import fr.acinq.bitcoin.Crypto.PublicKey
 import fr.acinq.eclair._
 import fr.acinq.bitcoin.{Block, ByteVector32, ByteVector64, Crypto, SatoshiLong}
@@ -12,6 +11,7 @@ import fr.acinq.eclair.router.Router.ChannelHop
 import fr.acinq.eclair.transactions.CommitmentSpec
 import fr.acinq.eclair.wire.protocol.PaymentOnion.createSinglePartPayload
 import fr.acinq.eclair.wire.protocol.{ChannelUpdate, UpdateAddHtlc, UpdateFulfillHtlc}
+import fr.acinq.fc.app.FC.USD_TICKER
 import fr.acinq.fc.app.channel.{HC_DATA_ESTABLISHED, HostedCommitments}
 import org.scalatest.funsuite.AnyFunSuite
 
@@ -23,7 +23,7 @@ class HostedChannelTypesSpec extends AnyFunSuite {
   val channelId: ByteVector32 = randomBytes32
 
   val initHostedChannel: InitHostedChannel = InitHostedChannel(maxHtlcValueInFlightMsat = UInt64(90000L),
-    htlcMinimumMsat = 10.msat, maxAcceptedHtlcs = 3, 1000000L.msat, initialClientBalanceMsat = 0.msat, initialRate=0.msat, List(FCFeature.mandatory))
+    htlcMinimumMsat = 10.msat, maxAcceptedHtlcs = 3, 1000000L.msat, initialClientBalanceMsat = 0.msat, initialRate=0.msat, ticker=USD_TICKER, List(FCFeature.mandatory))
 
   val preimage1: ByteVector32 = randomBytes32
   val preimage2: ByteVector32 = randomBytes32

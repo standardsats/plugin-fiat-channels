@@ -2,6 +2,7 @@ package fr.acinq.fc.app
 
 import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.event.LoggingAdapter
+import akka.http.scaladsl.common.NameReceptacle
 import akka.http.scaladsl.server.Route
 import akka.pattern.ask
 import akka.util.Timeout
@@ -85,6 +86,14 @@ object FC {
 
   final val HC_MARGIN_CHANNEL_TAG = 53495
 
+  final val USD_TICKER = "USD"
+  final val EUR_TICKER = "EUR"
+
+  final val knownTickers: Set[String] = Set(
+    USD_TICKER,
+    EUR_TICKER
+  )
+
   val hostedMessageTags: Set[Int] =
     Set(HC_INVOKE_HOSTED_CHANNEL_TAG, HC_INIT_HOSTED_CHANNEL_TAG, HC_LAST_CROSS_SIGNED_STATE_TAG, HC_STATE_UPDATE_TAG,
       HC_STATE_OVERRIDE_TAG, HC_HOSTED_CHANNEL_BRANDING_TAG, HC_ANNOUNCEMENT_SIGNATURE_TAG, HC_RESIZE_CHANNEL_TAG,
@@ -161,6 +170,7 @@ class FC extends Plugin with RouteProvider {
     import scala.concurrent.ExecutionContext.Implicits.global
 
     val hostedStateUnmarshaller = "state".as[ByteVector](binaryDataUnmarshaller)
+    val tickerParam: NameReceptacle[String] = "ticker".as[String]
 
     def getHostedStateResult(state: ByteVector) = {
       val remoteState = FiatChannelCodecs.hostedStateCodec.decodeValue(state.toBitVector).require
@@ -175,9 +185,9 @@ class FC extends Plugin with RouteProvider {
     }
 
     val invoke: Route = postRequest("fc-invoke") { implicit t =>
-      formFields("refundAddress", "secret".as[ByteVector](binaryDataUnmarshaller), nodeIdFormParam) { case (refundAddress, secret, remoteNodeId) =>
+      formFields("refundAddress", "secret".as[ByteVector](binaryDataUnmarshaller), nodeIdFormParam, tickerParam) { case (refundAddress, secret, remoteNodeId, ticker) =>
         val refundPubkeyScript = Script.write(fr.acinq.eclair.addressToPublicKeyScript(refundAddress, kit.nodeParams.chainHash))
-        completeCommand(HC_CMD_LOCAL_INVOKE(remoteNodeId, refundPubkeyScript, secret))
+        completeCommand(HC_CMD_LOCAL_INVOKE(remoteNodeId, refundPubkeyScript, secret, ticker))
       }
     }
 

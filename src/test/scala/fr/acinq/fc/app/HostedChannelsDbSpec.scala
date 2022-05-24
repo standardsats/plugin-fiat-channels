@@ -2,6 +2,7 @@ package fr.acinq.fc.app
 
 import fr.acinq.eclair._
 import com.softwaremill.quicklens._
+
 import scala.collection.parallel.CollectionConverters._
 import fr.acinq.fc.app.Tools.{DuplicateHandler, DuplicateShortId}
 import fr.acinq.bitcoin.{ByteVector32, Satoshi}
@@ -13,6 +14,7 @@ import fr.acinq.eclair.transactions.CommitmentSpec
 import fr.acinq.fc.app.db.HostedChannelsDb
 import org.scalatest.funsuite.AnyFunSuite
 import fr.acinq.eclair.ShortChannelId
+import fr.acinq.fc.app.FC.USD_TICKER
 
 
 class HostedChannelsDbSpec extends AnyFunSuite {
@@ -137,7 +139,7 @@ class HostedChannelsDbSpec extends AnyFunSuite {
   test("HC short channel ids are random") {
     val hostNodeId = randomBytes32
     val iterations = 1000000
-    val sids = List.fill(iterations)(Tools.hostedShortChanId(randomBytes32, hostNodeId))
+    val sids = List.fill(iterations)(Tools.hostedShortChanId(randomBytes32, hostNodeId, USD_TICKER))
     assert(sids.size == sids.toSet.size)
   }
 }

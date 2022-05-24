@@ -4,6 +4,7 @@ import fr.acinq.bitcoin.ByteVector32
 import fr.acinq.eclair.TestConstants.{Alice, Bob}
 import fr.acinq.eclair.channel._
 import fr.acinq.eclair.{TestKitBaseClass, wire}
+import fr.acinq.fc.app.FC.USD_TICKER
 import fr.acinq.fc.app._
 import org.scalatest.Outcome
 import org.scalatest.funsuite.FixtureAnyFunSuiteLike
@@ -33,7 +34,7 @@ class FCEstablishmentSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike w
     alice ! Worker.HCPeerConnected
     awaitCond(bob.stateName == SYNCING)
     awaitCond(alice.stateName == SYNCING)
-    bob ! HC_CMD_LOCAL_INVOKE(aliceKit.nodeParams.nodeId, refundScriptPubKey = ByteVector32.Zeroes, ByteVector32.Zeroes)
+    bob ! HC_CMD_LOCAL_INVOKE(aliceKit.nodeParams.nodeId, refundScriptPubKey = ByteVector32.Zeroes, ByteVector32.Zeroes, USD_TICKER)
     awaitCond(bob.stateData.isInstanceOf[HC_DATA_CLIENT_WAIT_HOST_INIT])
     alice ! bob2alice.expectMsgType[InvokeHostedChannel]
     bob ! alice2bob.expectMsgType[wire.protocol.Error]
@@ -49,7 +50,7 @@ class FCEstablishmentSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike w
     alice ! Worker.HCPeerConnected
     awaitCond(bob.stateName == SYNCING)
     awaitCond(alice.stateName == SYNCING)
-    bob ! HC_CMD_LOCAL_INVOKE(aliceKit.nodeParams.nodeId, Bob.channelParams.defaultFinalScriptPubKey, ByteVector32.Zeroes)
+    bob ! HC_CMD_LOCAL_INVOKE(aliceKit.nodeParams.nodeId, Bob.channelParams.defaultFinalScriptPubKey, ByteVector32.Zeroes, USD_TICKER)
     awaitCond(bob.stateData.isInstanceOf[HC_DATA_CLIENT_WAIT_HOST_INIT])
     alice ! bob2alice.expectMsgType[InvokeHostedChannel]
     awaitCond(alice.stateData.isInstanceOf[HC_DATA_HOST_WAIT_CLIENT_STATE_UPDATE])
@@ -77,7 +78,7 @@ class FCEstablishmentSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike w
     alice ! Worker.HCPeerConnected
     awaitCond(bob.stateName == SYNCING)
     awaitCond(alice.stateName == SYNCING)
-    bob ! HC_CMD_LOCAL_INVOKE(aliceKit.nodeParams.nodeId, Bob.channelParams.defaultFinalScriptPubKey, ByteVector32.Zeroes)
+    bob ! HC_CMD_LOCAL_INVOKE(aliceKit.nodeParams.nodeId, Bob.channelParams.defaultFinalScriptPubKey, ByteVector32.Zeroes, USD_TICKER)
     awaitCond(bob.stateData.isInstanceOf[HC_DATA_CLIENT_WAIT_HOST_INIT])
     alice ! bob2alice.expectMsgType[InvokeHostedChannel]
     awaitCond(alice.stateData.isInstanceOf[HC_DATA_HOST_WAIT_CLIENT_STATE_UPDATE])

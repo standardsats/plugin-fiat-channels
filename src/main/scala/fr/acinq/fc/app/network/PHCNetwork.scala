@@ -6,6 +6,7 @@ import fr.acinq.eclair.ShortChannelId
 import fr.acinq.eclair.router.Announcements
 import fr.acinq.eclair.wire.internal.channel.version3.FCProtocolCodecs
 import fr.acinq.eclair.wire.protocol.{AnnouncementMessage, ChannelAnnouncement, ChannelUpdate, UnknownMessage}
+import fr.acinq.fc.app.FC.USD_TICKER
 import fr.acinq.fc.app.PHCConfig
 import fr.acinq.fc.app.Tools._
 import fr.acinq.fc.app.network.PHCNetwork.ShortChannelIdSet
@@ -59,8 +60,8 @@ case class PHCNetwork(channels: Map[ShortChannelId, PHC],
                       perNode: Map[Crypto.PublicKey, ShortChannelIdSet],
                       unsaved: MessagesReceived) {
 
-  def isAnnounceAcceptable(announce: ChannelAnnouncement): Boolean =
-    hostedShortChanId(announce.nodeId1.value, announce.nodeId2.value) == announce.shortChannelId && // This also excludes normal graph collision
+  def isAnnounceAcceptable(announce: ChannelAnnouncement): Boolean = // TODO: announce ticker
+    hostedShortChanId(announce.nodeId1.value, announce.nodeId2.value, USD_TICKER) == announce.shortChannelId && // This also excludes normal graph collision
       announce.bitcoinSignature1 == announce.nodeSignature1 && announce.bitcoinSignature2 == announce.nodeSignature2 &&
       announce.bitcoinKey1 == announce.nodeId1 && announce.bitcoinKey2 == announce.nodeId2
 

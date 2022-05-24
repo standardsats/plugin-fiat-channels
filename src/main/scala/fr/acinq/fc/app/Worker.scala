@@ -118,7 +118,7 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, r
       if (kit.nodeParams.nodeId == cmd.remoteNodeId) sender ! CMDResFailure("HC with itself is prohibited")
       else if (isInMemory || isInDb) sender ! CMDResFailure("HC with remote peer already exists")
       else if (!isConnected) sender ! CMDResFailure("Not yet connected to remote peer")
-      else spawnChannel(cmd.remoteNodeId) |> HCPeerConnected |> cmd
+      else spawnChannel(cmd.remoteNodeId, cmd.ticker) |> HCPeerConnected |> cmd
       clientChannelRemoteNodeIds += cmd.remoteNodeId
 
     case cmd: HC_CMD_RESTORE =>
@@ -126,7 +126,7 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, r
       val isInMemory = Option(inMemoryHostedChannels get cmd.remoteNodeId).nonEmpty
       if (kit.nodeParams.nodeId == cmd.remoteNodeId) sender ! CMDResFailure("HC with itself is prohibited")
       else if (isInMemory || isInDb) sender ! CMDResFailure("HC with remote peer already exists")
-      else spawnChannel(cmd.remoteNodeId) ! cmd
+      else spawnChannel(cmd.remoteNodeId, cmd.remoteData.lastCrossSignedState.initHostedChannel.ticker) ! cmd
 
     case cmd: HasRemoteNodeIdHostedCommand =>
       Option(inMemoryHostedChannels get cmd.remoteNodeId) match {
@@ -183,22 +183,22 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, r
       }
   }
 
-  def spawnChannel(nodeId: PublicKey): ActorRef = {
-    val spawnedChannelProps = Props(classOf[HostedChannel], kit, nodeId, channelsDb, hostedSync, cfg)
+  def spawnChannel(nodeId: PublicKey, ticker: String): ActorRef = {
+    val spawnedChannelProps = Props(classOf[HostedChannel], kit, nodeId, ticker, channelsDb, hostedSync, cfg)
     val channelRef = context watch context.actorOf(spawnedChannelProps)
     inMemoryHostedChannels.put(nodeId, channelRef)
     channelRef
   }
 
   def guardSpawn(nodeId: PublicKey, wrap: PeerConnectedWrap, invoke: InvokeHostedChannel): Unit = {
-    if (ipAntiSpam(wrap.remoteIp) < cfg.vals.maxNewChansPerIpPerHour) spawnChannel(nodeId) |> HCPeerConnected |> invoke
+    if (ipAntiSpam(wrap.remoteIp) < cfg.vals.maxNewChansPerIpPerHour) spawnChannel(nodeId, invoke.ticker) |> HCPeerConnected |> invoke
     else wrap sendHasChannelIdMsg eclair.wire.protocol.Error(ByteVector32.Zeroes, ErrorCodes.ERR_HOSTED_CHANNEL_DENIED)
     // Record this request for anti-spam
     ipAntiSpam(wrap.remoteIp) += 1
   }
 
   def spawnPreparedChannel(data: HC_DATA_ESTABLISHED): ActorRef = {
-    val channel = spawnChannel(data.commitments.remoteNodeId)
+    val channel = spawnChannel(data.commitments.remoteNodeId, data.commitments.lastCrossSignedState.initHostedChannel.ticker)
     channel ! data
     channel
   }
