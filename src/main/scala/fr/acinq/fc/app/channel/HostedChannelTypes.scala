@@ -30,7 +30,7 @@ sealed trait HasRemoteNodeIdHostedCommand {
   def remoteNodeId: PublicKey
 }
 
-case class HC_CMD_LOCAL_INVOKE(remoteNodeId: PublicKey, refundScriptPubKey: ByteVector, secret: ByteVector, ticker: String) extends HasRemoteNodeIdHostedCommand
+case class HC_CMD_LOCAL_INVOKE(remoteNodeId: PublicKey, refundScriptPubKey: ByteVector, secret: ByteVector, ticker: Ticker) extends HasRemoteNodeIdHostedCommand
 
 case class HC_CMD_EXTERNAL_FULFILL(remoteNodeId: PublicKey, htlcId: Long, paymentPreimage: ByteVector32) extends HasRemoteNodeIdHostedCommand
 

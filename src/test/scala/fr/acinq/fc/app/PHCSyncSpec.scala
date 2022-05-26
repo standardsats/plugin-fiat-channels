@@ -12,7 +12,7 @@ import fr.acinq.eclair.router.Router.Data
 import fr.acinq.eclair.router.{Announcements, BaseRouterSpec, Router, SyncProgress}
 import fr.acinq.eclair.wire.internal.channel.version3.FCProtocolCodecs
 import fr.acinq.eclair.wire.protocol.UnknownMessage
-import fr.acinq.fc.app.FC.USD_TICKER
+import fr.acinq.fc.app.Ticker.USD_TICKER
 import fr.acinq.fc.app.db.HostedUpdatesDb
 import fr.acinq.fc.app.network.HostedSync.{GotAllSyncFrom, SendSyncTo, TickSendGossip}
 import fr.acinq.fc.app.network._

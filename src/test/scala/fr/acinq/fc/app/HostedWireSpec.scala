@@ -10,7 +10,7 @@ import fr.acinq.eclair.channel.{Channel, Origin}
 import scodec.bits.{BitVector, ByteVector}
 import fr.acinq.eclair.blockchain.fee.FeeratePerKw
 import fr.acinq.eclair.router.Announcements
-import fr.acinq.fc.app.FC.USD_TICKER
+import fr.acinq.fc.app.Ticker.USD_TICKER
 import org.scalatest.funsuite.AnyFunSuite
 
 import scala.util.Random

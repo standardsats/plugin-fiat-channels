@@ -11,7 +11,7 @@ import fr.acinq.eclair.router.Router.ChannelHop
 import fr.acinq.eclair.transactions.CommitmentSpec
 import fr.acinq.eclair.wire.protocol.PaymentOnion.createSinglePartPayload
 import fr.acinq.eclair.wire.protocol.{ChannelUpdate, UpdateAddHtlc, UpdateFulfillHtlc}
-import fr.acinq.fc.app.FC.USD_TICKER
+import fr.acinq.fc.app.Ticker.USD_TICKER
 import fr.acinq.fc.app.channel.{HC_DATA_ESTABLISHED, HostedCommitments}
 import org.scalatest.funsuite.AnyFunSuite
 

@@ -14,7 +14,7 @@ import fr.acinq.eclair.transactions.CommitmentSpec
 import fr.acinq.fc.app.db.HostedChannelsDb
 import org.scalatest.funsuite.AnyFunSuite
 import fr.acinq.eclair.ShortChannelId
-import fr.acinq.fc.app.FC.USD_TICKER
+import fr.acinq.fc.app.Ticker.USD_TICKER
 
 
 class HostedChannelsDbSpec extends AnyFunSuite {

@@ -35,7 +35,7 @@ object HostedChannel {
   case class SendAnnouncements(force: Boolean)
 }
 
-class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: String, channelsDb: HostedChannelsDb, hostedSync: ActorRef, cfg: Config) extends FSMDiagnosticActorLogging[ChannelState, HostedData] {
+class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsDb: HostedChannelsDb, hostedSync: ActorRef, cfg: Config) extends FSMDiagnosticActorLogging[ChannelState, HostedData] {
 
   lazy val channelId: ByteVector32 = Tools.hostedChanId(kit.nodeParams.nodeId.value, remoteNodeId.value, ticker)
 

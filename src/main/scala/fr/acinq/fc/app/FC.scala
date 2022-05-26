@@ -2,8 +2,9 @@ package fr.acinq.fc.app
 
 import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.event.LoggingAdapter
-import akka.http.scaladsl.common.NameReceptacle
+import akka.http.scaladsl.common.{NameReceptacle, NameUnmarshallerReceptacle}
 import akka.http.scaladsl.server.Route
+import akka.http.scaladsl.unmarshalling.Unmarshaller
 import akka.pattern.ask
 import akka.util.Timeout
 import fr.acinq.bitcoin.{ByteVector32, Satoshi, Script}
@@ -23,6 +24,7 @@ import fr.acinq.eclair.wire.protocol.{FailureMessage, UpdateAddHtlc}
 import fr.acinq.fc.app.channel._
 import fr.acinq.fc.app.db.{Blocking, HostedChannelsDb, HostedUpdatesDb, PreimagesDb}
 import fr.acinq.fc.app.FC._
+import fr.acinq.fc.app.Ticker.{EUR_TICKER, USD_TICKER}
 import fr.acinq.fc.app.network.{HostedSync, OperationalData, PHC, PreimageBroadcastCatcher}
 import fr.acinq.fc.app.rate.{BinanceSourceModified, CentralBankOracle, EcbSource, RateOracle}
 import scodec.bits.ByteVector
@@ -86,14 +88,6 @@ object FC {
 
   final val HC_MARGIN_CHANNEL_TAG = 53495
 
-  final val USD_TICKER = "USD"
-  final val EUR_TICKER = "EUR"
-
-  final val knownTickers: Set[String] = Set(
-    USD_TICKER,
-    EUR_TICKER
-  )
-
   val hostedMessageTags: Set[Int] =
     Set(HC_INVOKE_HOSTED_CHANNEL_TAG, HC_INIT_HOSTED_CHANNEL_TAG, HC_LAST_CROSS_SIGNED_STATE_TAG, HC_STATE_UPDATE_TAG,
       HC_STATE_OVERRIDE_TAG, HC_HOSTED_CHANNEL_BRANDING_TAG, HC_ANNOUNCEMENT_SIGNATURE_TAG, HC_RESIZE_CHANNEL_TAG,
@@ -128,8 +122,8 @@ class FC extends Plugin with RouteProvider {
     implicit val coreActorSystem: ActorSystem = eclairKit.system
     preimageRef = eclairKit.system actorOf Props(classOf[PreimageBroadcastCatcher], new PreimagesDb(config.db), eclairKit, config.vals)
     syncRef = eclairKit.system actorOf Props(classOf[HostedSync], eclairKit, new HostedUpdatesDb(config.db), config.vals.phcConfig)
-    rateOracleRef = eclairKit.system actorOf Props(classOf[RateOracle], eclairKit, new BinanceSourceModified(x => x, "BTCEUR", implicitly))
-    ecbOracleRef = eclairKit.system actorOf Props(classOf[CentralBankOracle], eclairKit, new EcbSource("USD", implicitly))
+    rateOracleRef = eclairKit.system actorOf Props(classOf[RateOracle], eclairKit, new BinanceSourceModified(x => x, EUR_TICKER, "BTCEUR", implicitly))
+    ecbOracleRef = eclairKit.system actorOf Props(classOf[CentralBankOracle], eclairKit, new EcbSource(USD_TICKER, implicitly))
     workerRef = eclairKit.system actorOf Props(classOf[Worker], eclairKit, syncRef, rateOracleRef, preimageRef, channelsDb, config)
     kit = eclairKit
   }
@@ -170,7 +164,12 @@ class FC extends Plugin with RouteProvider {
     import scala.concurrent.ExecutionContext.Implicits.global
 
     val hostedStateUnmarshaller = "state".as[ByteVector](binaryDataUnmarshaller)
-    val tickerParam: NameReceptacle[String] = "ticker".as[String]
+    val tickerParam: NameUnmarshallerReceptacle[Ticker] =
+      "ticker".as[Ticker](Unmarshaller.strict { str: String =>
+        Ticker
+          .tickerByTag(str)
+          .getOrElse(throw new IllegalArgumentException(s"Unknown ticker ${str}"))
+      })
 
     def getHostedStateResult(state: ByteVector) = {
       val remoteState = FiatChannelCodecs.hostedStateCodec.decodeValue(state.toBitVector).require

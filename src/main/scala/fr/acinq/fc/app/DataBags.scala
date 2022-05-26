@@ -14,7 +14,7 @@ sealed trait HostedChannelMessage
 case class InvokeHostedChannel(chainHash: ByteVector32,
                                refundScriptPubKey: ByteVector,
                                secret: ByteVector = ByteVector.empty,
-                               ticker: String) extends HostedChannelMessage {
+                               ticker: Ticker) extends HostedChannelMessage {
   val finalSecret: ByteVector = secret.take(128)
 }
 
@@ -24,7 +24,7 @@ case class InitHostedChannel(maxHtlcValueInFlightMsat: UInt64,
                              channelCapacityMsat: MilliSatoshi,
                              initialClientBalanceMsat: MilliSatoshi,
                              initialRate: MilliSatoshi,
-                             ticker: String,
+                             ticker: Ticker,
                              features: List[Int] = Nil) extends HostedChannelMessage
 
 case class HostedChannelBranding(rgbColor: Color,

@@ -53,14 +53,14 @@ object Tools {
     if (pubkey1First) pubkey1 ++ pubkey2 else pubkey2 ++ pubkey1
   }
 
-  def hostedChanId(pubkey1: ByteVector, pubkey2: ByteVector, ticker: String): ByteVector32 = {
+  def hostedChanId(pubkey1: ByteVector, pubkey2: ByteVector, ticker: Ticker): ByteVector32 = {
     val nodesCombined = hostedNodesCombined(pubkey1, pubkey2)
-    val tickerBytes = ticker.getBytes(StandardCharsets.UTF_8)
+    val tickerBytes = ticker.tag.getBytes(StandardCharsets.UTF_8)
     Crypto.sha256(nodesCombined ++ ByteVector(tickerBytes))
   }
 
-  def hostedShortChanId(pubkey1: ByteVector, pubkey2: ByteVector, ticker: String): ShortChannelId = {
-    val tickerBytes = ticker.getBytes(StandardCharsets.UTF_8)
+  def hostedShortChanId(pubkey1: ByteVector, pubkey2: ByteVector, ticker: Ticker): ShortChannelId = {
+    val tickerBytes = ticker.tag.getBytes(StandardCharsets.UTF_8)
     val hash = hostedNodesCombined(pubkey1, pubkey2) ++ ByteVector(tickerBytes)
     val stream = new ByteArrayInputStream(hash.toArray)
     def getChunk: Long = Protocol.uint64(stream, ByteOrder.BIG_ENDIAN)
@@ -110,7 +110,7 @@ class Config(datadir: File) {
 case class FCParams(feeBaseMsat: Long, feeProportionalMillionths: Long, cltvDeltaBlocks: Int, channelCapacityMsat: Long, htlcMinimumMsat: Long, maxAcceptedHtlcs: Int, isResizable: Boolean) {
   def lastUpdateDiffers(u: ChannelUpdate): Boolean = u.cltvExpiryDelta.toInt != cltvDeltaBlocks || u.htlcMinimumMsat != htlcMinimum || u.feeBaseMsat != feeBase || u.feeProportionalMillionths != feeProportionalMillionths
 
-  def initMsg(rate: MilliSatoshi, ticker: String): InitHostedChannel = InitHostedChannel(UInt64(channelCapacityMsat), htlcMinimum, maxAcceptedHtlcs, channelCapacityMsat.msat, initialClientBalanceMsat = 0L.msat, initialRate = rate, ticker = ticker, channelFeatures)
+  def initMsg(rate: MilliSatoshi, ticker: Ticker): InitHostedChannel = InitHostedChannel(UInt64(channelCapacityMsat), htlcMinimum, maxAcceptedHtlcs, channelCapacityMsat.msat, initialClientBalanceMsat = 0L.msat, initialRate = rate, ticker = ticker, channelFeatures)
 
   lazy val channelFeatures: List[Int] = if (isResizable) List(FCFeature.mandatory, ResizeableFCFeature.mandatory) else List(FCFeature.mandatory)
 

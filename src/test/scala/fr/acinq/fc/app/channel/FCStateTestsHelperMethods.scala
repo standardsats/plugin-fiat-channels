@@ -16,7 +16,7 @@ import fr.acinq.eclair.router.Router.ChannelHop
 import fr.acinq.eclair.wire.protocol.PaymentOnion.createSinglePartPayload
 import fr.acinq.eclair.wire.protocol.{AnnouncementMessage, ChannelUpdate, HasChannelId, UnknownMessage, UpdateAddHtlc, UpdateFulfillHtlc}
 import fr.acinq.eclair.{BlockHeight, CltvExpiryDelta, Kit, MilliSatoshi, TestConstants, randomBytes32}
-import fr.acinq.fc.app.FC.USD_TICKER
+import fr.acinq.fc.app.Ticker.USD_TICKER
 import fr.acinq.fc.app.db.HostedChannelsDb
 import fr.acinq.fc.app._
 import org.scalatest.{FixtureTestSuite, ParallelTestExecution}

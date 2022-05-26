@@ -12,11 +12,16 @@ import scodec.{Attempt, Codec, DecodeResult, Err}
 
 
 object FCProtocolCodecs {
+  val tickerCodec = {
+    val tag: Codec[Ticker] = variableSizeBytes(uint16, utf8).narrow(tag => Attempt.fromOption(Ticker.tickerByTag(tag), Err.apply(s"Unknown ticker ${tag}")), _.tag)
+    tag withContext "tag"
+  }.as[Ticker]
+
   val invokeHostedChannelCodec = {
     (bytes32 withContext "chainHash") ::
       (varsizebinarydata withContext "refundScriptPubKey") ::
       (varsizebinarydata withContext "secret") ::
-      (variableSizeBytes(uint16, utf8) withContext "ticker")
+      (tickerCodec withContext "ticker")
   }.as[InvokeHostedChannel]
 
   val initHostedChannelCodec = {
@@ -26,7 +31,7 @@ object FCProtocolCodecs {
       (millisatoshi withContext "channelCapacityMsat") ::
       (millisatoshi withContext "initialClientBalanceMsat") ::
       (millisatoshi withContext "initialRate") ::
-      (variableSizeBytes(uint16, utf8) withContext "ticker") ::
+      (tickerCodec withContext "ticker") ::
       (listOfN(uint16, uint16) withContext "features")
   }.as[InitHostedChannel]
 

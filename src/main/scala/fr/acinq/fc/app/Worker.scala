@@ -183,7 +183,7 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, r
       }
   }
 
-  def spawnChannel(nodeId: PublicKey, ticker: String): ActorRef = {
+  def spawnChannel(nodeId: PublicKey, ticker: Ticker): ActorRef = {
     val spawnedChannelProps = Props(classOf[HostedChannel], kit, nodeId, ticker, channelsDb, hostedSync, cfg)
     val channelRef = context watch context.actorOf(spawnedChannelProps)
     inMemoryHostedChannels.put(nodeId, channelRef)

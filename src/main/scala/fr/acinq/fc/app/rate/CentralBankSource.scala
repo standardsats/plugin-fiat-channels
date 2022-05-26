@@ -13,6 +13,8 @@ import akka.util.ByteString
 import fr.acinq.eclair
 import fr.acinq.eclair._
 import fr.acinq.eclair.api.serde.JsonSupport.fromByteStringUnmarshaller
+import fr.acinq.fc.app.Ticker
+import fr.acinq.fc.app.Ticker.EUR_TICKER
 import grizzled.slf4j.Logging
 import spray.json.DefaultJsonProtocol
 import spray.json.DefaultJsonProtocol._
@@ -24,31 +26,31 @@ import scala.concurrent.ExecutionContext.Implicits.global
 //ecb stuff
 import scala.xml.XML
 
-case class CentralBankRate(rate: Double, ticker: String, asset: String)
+case class CentralBankRate(rate: Double, ticker: Ticker, asset: Ticker)
 
 trait CentralBankSource {
   def askRates: Future[CentralBankRate]
 }
 
-class EcbSource(ticker: String = "USD", implicit val system: ActorSystem) extends CentralBankSource {
+class EcbSource(ticker: Ticker, implicit val system: ActorSystem) extends CentralBankSource {
   val http = Http(system)
   val ecbUri = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml"
 
   def askRates: Future[CentralBankRate] = {
-    if(ticker == "EUR")
-      return Future(CentralBankRate(1, ticker, "EUR"))
+    if(ticker == EUR_TICKER)
+      return Future(CentralBankRate(1, ticker, EUR_TICKER))
 
     val xml = XML.load(ecbUri)
     val cubes = (xml \\ "Cube")
     val xml_rate = for {
       cube <- cubes
-      if (cube \ "@currency").text == ticker
+      if (cube \ "@currency").text == ticker.tag
     } yield (cube \ "@rate").text
     var rate: Double = 0
     if (xml_rate.size > 0) {
       rate = xml_rate(0).toDouble
     }
 
-    Future(CentralBankRate(rate, ticker, "EUR"))
+    Future(CentralBankRate(rate, ticker, EUR_TICKER))
   }
 }
