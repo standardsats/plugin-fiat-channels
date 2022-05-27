@@ -41,7 +41,7 @@ object Worker {
   val notFound: CMDResFailure = CMDResFailure("HC with remote node is not found")
 }
 
-class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, rateOracle: ActorRef, channelsDb: HostedChannelsDb, cfg: Config) extends Actor with Logging { me =>
+class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, channelsDb: HostedChannelsDb, cfg: Config) extends Actor with Logging { me =>
   context.system.scheduler.scheduleWithFixedDelay(60.minutes, 60.minutes, self, Worker.TickClearIpAntiSpam)
   context.system.scheduler.scheduleWithFixedDelay(5.seconds, 5.seconds, self, Worker.TickReconnectHosts)
   context.system.scheduler.scheduleWithFixedDelay(12.hours, 12.hours, self, TickRemoveIdleChannels)

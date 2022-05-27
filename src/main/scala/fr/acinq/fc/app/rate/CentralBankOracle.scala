@@ -37,9 +37,9 @@ class CentralBankOracle(kit: eclair.Kit, source: CentralBankSource) extends Acto
       logger.info("Updating current central bank rate")
       source.askRates.pipeTo(self)
     case CentralBankRate(0, ticker, asset) =>
-      logger.error(s"No such pair ${asset}/${ticker}")
+      logger.error(s"No such pair ${asset.tag}/${ticker.tag}")
     case CentralBankRate(rate, ticker, asset) =>
-     logger.info("Got response, rate: " + rate + s" ${asset}/${ticker}")
+     logger.info("Got response, rate: " + rate + s" ${asset.tag}/${ticker.tag}")
       try {
         CentralBankOracle.rateWrite.lock()
         CentralBankOracle.lastRate = rate
@@ -52,7 +52,7 @@ class CentralBankOracle(kit: eclair.Kit, source: CentralBankSource) extends Acto
             CentralBankOracle.maxLastUpdate = Some(now)
         }
       } finally CentralBankOracle.rateWrite.unlock()
-      logger.info("Recent rate: " + CentralBankOracle.lastRate + s" ${asset}/${ticker}")
+      logger.info("Recent rate: " + CentralBankOracle.lastRate + s" ${asset.tag}/${ticker.tag}")
     case Status.Failure(e) =>
       logger.error("Request failed: " + e)
   }

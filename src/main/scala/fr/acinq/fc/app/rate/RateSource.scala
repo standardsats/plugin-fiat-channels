@@ -25,7 +25,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 //ecb stuff
 import scala.xml.XML
 
-case class FiatRate(rate: Double)
+case class FiatRate(ticker: Ticker, rate: Double)
 
 trait RateSource {
   def ticker: Ticker
@@ -45,7 +45,7 @@ case class BitfinexSource(ticker: Ticker = USD(), api_ticker: String = "tBTCUSD"
           throw new RuntimeException("Request failed, response code: " + code)
       }
       values <- Unmarshal(body).to[List[Double]]
-    } yield FiatRate(values.head)
+    } yield FiatRate(ticker, values.head)
   }
 }
 
@@ -62,7 +62,7 @@ case class BitfinexSourceModified(predicate: Double => Double, ticker: Ticker = 
           throw new RuntimeException("Request failed, response code: " + code)
       }
       values <- Unmarshal(body).to[List[Double]]
-    } yield FiatRate(predicate(values.head))
+    } yield FiatRate(ticker, predicate(values.head))
   }
 }
 
@@ -85,7 +85,7 @@ case class BinanceSource(ticker: Ticker = USD(), api_ticker: String = "BTCUSDT",
           throw new RuntimeException("Request failed, response code: " + code)
       }
       values <- Unmarshal(body).to[BinanceResponse]
-    } yield FiatRate(values.price.toDouble)
+    } yield FiatRate(ticker, values.price.toDouble)
   }
 }
 
@@ -102,7 +102,7 @@ case class BinanceSourceModified(predicate: Double => Double, ticker: Ticker = U
           throw new RuntimeException("Request failed, response code: " + code)
       }
       values <- Unmarshal(body).to[BinanceResponse]
-    } yield FiatRate(predicate(values.price.toDouble))
+    } yield FiatRate(ticker, predicate(values.price.toDouble))
   }
 }
 

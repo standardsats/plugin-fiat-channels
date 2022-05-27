@@ -105,7 +105,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
       if (isWrongChain) stop(FSM.Normal) SendingHasChannelId Error(channelId, InvalidChainHash(channelId, kit.nodeParams.chainHash, remoteInvoke.chainHash).getMessage)
       else if (!isValidFinalScriptPubkey) stop(FSM.Normal) SendingHasChannelId Error(channelId, InvalidFinalScript(channelId).getMessage)
       else {
-        RateOracle.getCurrentRate() match {
+        RateOracle.getCurrentRate(ticker) match {
           case Some(rate) => stay using HC_DATA_HOST_WAIT_CLIENT_STATE_UPDATE(remoteInvoke, rate) SendingHosted cfg.vals.hcParams.initMsg(rate, remoteInvoke.ticker)
           case None =>  stop(FSM.Normal) SendingHasChannelId Error(channelId, ErrorCodes.ERR_HOSTED_INVALID_ORACLE_PRICE)
         }
@@ -305,7 +305,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
     case Event(fail: UpdateFailMalformedHtlc, data: HC_DATA_ESTABLISHED) => processRemoteResolve(data.commitments.receiveFailMalformed(fail), data)
 
     case Event(_: CMD_SIGN, data: HC_DATA_ESTABLISHED) if data.commitments.nextLocalUpdates.nonEmpty || data.resizeProposal.isDefined || data.marginProposal.isDefined =>
-      RateOracle.getCurrentRate() match {
+      RateOracle.getCurrentRate(ticker) match {
         case Some(oracleRate) =>
           log.info(s"Current oracle rate is ${oracleRate}")
           val newRate = if (oracleRate == 0.msat) data.commitments.lastCrossSignedState.rate else oracleRate
@@ -332,7 +332,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
       attemptStateUpdate(remoteSU, currentRate, data)
 
     case Event(_: QueryCurrentRate, data: HC_DATA_ESTABLISHED) =>
-      RateOracle.getCurrentRate() match {
+      RateOracle.getCurrentRate(ticker) match {
         case Some(oracleRate) => stay SendingHosted ReplyCurrentRate(oracleRate)
         case None =>
           log.error("Oracle price is not defined, not sending it to the client yet")
@@ -485,7 +485,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
       else stay StoringAndUsing data.copy(resizeProposal = Some(msg), marginProposal = None, overrideProposal = None) SendingHosted msg replying CMDResSuccess(cmd) Receiving CMD_SIGN(None)
 
     case Event(cmd: HC_CMD_MARGIN, data: HC_DATA_ESTABLISHED) =>
-      RateOracle.getMaxRate() match {
+      RateOracle.getMaxRate(ticker) match {
         case Some(maxRate) =>
           val nextMargin = data.commitments.nextMaxFiatMargin(maxRate)
           val maxCapacity = cfg.vals.phcConfig.maxCapacity
@@ -759,7 +759,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
   }
 
   def processMarginProposal(errorState: FsmStateExt, margin: MarginChannel, data: HC_DATA_ESTABLISHED): HostedFsmState = {
-    RateOracle.getMaxRate() match {
+    RateOracle.getMaxRate(ticker) match {
       case Some(currentRate) =>
         val isSignatureFine = margin.verifyClientSig(remoteNodeId)
         log.info(s"PLGN FC, margin proposal=$margin, max recent oracle rate=$currentRate, peer=$remoteNodeId")
@@ -831,7 +831,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
       data.marginProposal.map(data.withMargin) match {
         case Some(data1) =>
           log.info(s"Remote sign is not ok, trying with known margin resize")
-          RateOracle.getMaxRate() match {
+          RateOracle.getMaxRate(ticker) match {
             case Some(maxRate) =>
               if (maxRate < remoteSU.rate) {
                 log.info(s"Margin rate is higher than expected. Our max rate: ${maxRate}, client wants: ${remoteSU.rate}")
@@ -861,7 +861,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
       val delta = commits1.lastCrossSignedState.remoteBalanceMsat - data.commitments.lastCrossSignedState.remoteBalanceMsat
       // delta == 0 means rate adjustment
       if(delta != 0.msat) {
-        RateOracle.getCurrentRate() match {
+        RateOracle.getCurrentRate(ticker) match {
           case Some(oracleRate) => {
               val eurPrice = CentralBankOracle.getCurrentRate()
               // Warning: crossRate is relevant for EUR channels only
