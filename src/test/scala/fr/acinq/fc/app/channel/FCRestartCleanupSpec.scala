@@ -4,6 +4,7 @@ import fr.acinq.eclair._
 import fr.acinq.eclair.blockchain.CurrentBlockHeight
 import fr.acinq.eclair.channel.{CLOSED, CMD_FAIL_HTLC, CMD_FULFILL_HTLC}
 import fr.acinq.eclair.wire.protocol.{TemporaryNodeFailure, UpdateAddHtlc, UpdateFailHtlc, UpdateFulfillHtlc}
+import fr.acinq.fc.app.Ticker.USD_TICKER
 import fr.acinq.fc.app.db.HostedChannelsDb
 import fr.acinq.fc.app.{FC, HCTestUtils}
 import org.scalatest.Outcome
@@ -42,7 +43,7 @@ class FCRestartCleanupSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike 
 
     assert(bobHC.params.asInstanceOf[CustomCommitmentsPlugin].getIncomingHtlcs(bobKit.nodeParams, null).map(_.add).toSet == Set(alice2bobUpdateAdd3, alice2bobUpdateAdd4)) // Non-cross-signed remote add is disregarded
 
-    alice ! HC_CMD_SUSPEND(randomKey.publicKey)
+    alice ! HC_CMD_SUSPEND(randomKey.publicKey, USD_TICKER)
     bob ! alice2bob.expectMsgType[wire.protocol.Error]
     awaitCond(alice.stateName == CLOSED)
     awaitCond(bob.stateName == CLOSED)
@@ -84,7 +85,7 @@ class FCRestartCleanupSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike 
 
     awaitCond(aliceHC.params.asInstanceOf[CustomCommitmentsPlugin].getHtlcsRelayedOut(Nil, bobKit.nodeParams, null).values.flatten.map(_._2).toSet == Set(id3, id4, aliceAdd5.id)) // Pending outgoing is taken into account (we could have signed)
 
-    alice ! HC_CMD_SUSPEND(randomKey.publicKey)
+    alice ! HC_CMD_SUSPEND(randomKey.publicKey, USD_TICKER)
     bob ! alice2bob.expectMsgType[wire.protocol.Error]
     awaitCond(alice.stateName == CLOSED)
     awaitCond(bob.stateName == CLOSED)

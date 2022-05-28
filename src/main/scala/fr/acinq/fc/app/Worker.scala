@@ -51,7 +51,7 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, c
   context.system.eventStream.subscribe(channel = classOf[PeerConnected], subscriber = self)
   context.system.eventStream.subscribe(channel = classOf[SyncProgress], subscriber = self)
 
-  val inMemoryHostedChannels: HashBiMap[PublicKey, ActorRef] = HashBiMap.create[PublicKey, ActorRef]
+  val inMemoryHostedChannels: HashBiMap[PublicKey, (Ticker, ActorRef)] = HashBiMap.create[PublicKey, (Ticker, ActorRef)]
 
   val ipAntiSpam: mutable.Map[Array[Byte], Int] = mutable.Map.empty[Array[Byte], Int] withDefaultValue 0
 
@@ -66,7 +66,7 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, c
     logger.info(s"PLGN PHC, in-memory NodeIds, hot=$hotNodeIds, client=$clientNodeIds")
 
     clientChannelRemoteNodeIds ++= clientChannels.map(_.commitments.remoteNodeId)
-    (clientChannels ++ hotChannels).distinctBy(_.commitments.remoteNodeId).foreach(spawnPreparedChannel)
+    (clientChannels ++ hotChannels).distinctBy(c => (c.commitments.remoteNodeId, c.commitments.lastCrossSignedState.initHostedChannel.ticker)).foreach(spawnPreparedChannel)
 
     val nodeIdCheck = clientChannels.forall(_.commitments.localNodeId == kit.nodeParams.nodeId)
     logger.info(s"PLGN PHC, all HCs have the same NodeId which matches current NodeId=$nodeIdCheck")
@@ -77,12 +77,12 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, c
     case systemMessage: PeerConnected
       if systemMessage.connectionInfo.remoteInit.features.hasPluginFeature(FCFeature.plugin) =>
       FC.remoteNode2Connection += systemMessage.nodeId -> PeerConnectedWrapNormal(info = systemMessage)
-      Option(inMemoryHostedChannels get systemMessage.nodeId).foreach(_ |> HCPeerDisconnected |> HCPeerConnected)
+      Option(inMemoryHostedChannels get systemMessage.nodeId).foreach(_._2 |> HCPeerDisconnected |> HCPeerConnected)
       logger.info(s"PLGN FC, supporting peer connected, peer=${systemMessage.nodeId}")
 
     case systemMessage: PeerDisconnected =>
       FC.remoteNode2Connection -= systemMessage.nodeId
-      Option(inMemoryHostedChannels get systemMessage.nodeId).foreach(_ ! HCPeerDisconnected)
+      Option(inMemoryHostedChannels get systemMessage.nodeId).foreach(_._2 ! HCPeerDisconnected)
       logger.info(s"PLGN FC, supporting peer disconnected, peer=${systemMessage.nodeId}")
 
     case Worker.TickClearIpAntiSpam => ipAntiSpam.clear
@@ -98,22 +98,24 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, c
 
         case (Attempt.Successful(_: AskBrandingInfo), Some(wrap), _) => if (cfg.vals.branding.enabled) wrap sendHostedChannelMsg cfg.brandingMessage
         // Special handling for InvokeHostedChannel: if chan exists neither in memory nor in db, then this is a new chan request and anti-spam rules apply
-        case (Attempt.Successful(invoke: InvokeHostedChannel), Some(wrap), null) => restore(guardSpawn(nodeId, wrap, invoke), _ |> HCPeerConnected |> invoke)(nodeId)
+        case (Attempt.Successful(invoke: InvokeHostedChannel), Some(wrap), null) => restore(guardSpawn(nodeId, wrap, invoke), _ |> HCPeerConnected |> invoke)(nodeId, invoke.ticker)
+        // Special handling for InvokeHostedChannel: if chan exists but it has wrong ticker
+        case (Attempt.Successful(invoke: InvokeHostedChannel), Some(wrap), (ticker, _)) if ticker != invoke.ticker => restore(guardSpawn(nodeId, wrap, invoke), _ |> HCPeerConnected |> invoke)(nodeId, invoke.ticker)
         case (Attempt.Successful(_: HostedChannelMessage), _, null) => logger.info(s"PLGN FC, no target for HostedMessage, messageTag=${message.tag}, peer=$nodeId")
-        case (Attempt.Successful(hosted: HostedChannelMessage), _, channelRef) => channelRef ! hosted
+        case (Attempt.Successful(hosted: HostedChannelMessage), _, (_, channelRef)) => channelRef ! hosted
       }
 
     case UnknownMessageReceived(_, nodeId, message, _) if FC.chanIdMessageTags contains message.tag =>
       Tuple2(FCProtocolCodecs decodeHasChanIdMessage message, inMemoryHostedChannels get nodeId) match {
         case (_: Attempt.Failure, _) => logger.info(s"PLGN FC, HasChannelId message decoding fail, messageTag=${message.tag}, peer=$nodeId")
-        case (Attempt.Successful(error: eclair.wire.protocol.Error), null) => restore(Tools.none, _ |> HCPeerConnected |> error)(nodeId)
+        case (Attempt.Successful(error: eclair.wire.protocol.Error), null) => restoreByChanId(Tools.none, _ |> HCPeerConnected |> error)(error.channelId)
         case (_, null) => logger.info(s"PLGN FC, no target for HasChannelIdMessage, messageTag=${message.tag}, peer=$nodeId")
-        case (Attempt.Successful(msg), channelRef) => channelRef ! msg
+        case (Attempt.Successful(msg), (_, channelRef)) => channelRef ! msg
       }
 
     case cmd: HC_CMD_LOCAL_INVOKE =>
       val isConnected = FC.remoteNode2Connection.contains(cmd.remoteNodeId)
-      val isInDb = channelsDb.getChannelByRemoteNodeId(cmd.remoteNodeId).nonEmpty
+      val isInDb = channelsDb.getChannelByRemoteNodeId(cmd.remoteNodeId, cmd.ticker).nonEmpty
       val isInMemory = Option(inMemoryHostedChannels get cmd.remoteNodeId).nonEmpty
       if (kit.nodeParams.nodeId == cmd.remoteNodeId) sender ! CMDResFailure("HC with itself is prohibited")
       else if (isInMemory || isInDb) sender ! CMDResFailure("HC with remote peer already exists")
@@ -122,7 +124,7 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, c
       clientChannelRemoteNodeIds += cmd.remoteNodeId
 
     case cmd: HC_CMD_RESTORE =>
-      val isInDb = channelsDb.getChannelByRemoteNodeId(cmd.remoteNodeId).nonEmpty
+      val isInDb = channelsDb.getChannelByRemoteNodeId(cmd.remoteNodeId, cmd.remoteData.lastCrossSignedState.initHostedChannel.ticker).nonEmpty
       val isInMemory = Option(inMemoryHostedChannels get cmd.remoteNodeId).nonEmpty
       if (kit.nodeParams.nodeId == cmd.remoteNodeId) sender ! CMDResFailure("HC with itself is prohibited")
       else if (isInMemory || isInDb) sender ! CMDResFailure("HC with remote peer already exists")
@@ -130,23 +132,26 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, c
 
     case cmd: HasRemoteNodeIdHostedCommand =>
       Option(inMemoryHostedChannels get cmd.remoteNodeId) match {
-        case None => restore(sender ! notFound, _ |> cmd)(cmd.remoteNodeId)
-        case Some(channelRef) => channelRef forward cmd
+        case None => restore(sender ! notFound, _ |> cmd)(cmd.remoteNodeId, cmd.ticker)
+        case Some((ticker, _)) if ticker != cmd.ticker => restore(sender ! notFound, _ |> cmd)(cmd.remoteNodeId, cmd.ticker)
+        case Some((_, channelRef)) => channelRef forward cmd
       }
 
     case cmd: HC_CMD_GET_ALL_CHANNELS =>
       val resMap = scala.collection.mutable.Map.empty[PublicKey, Future[CMDResInfo]]
-      inMemoryHostedChannels.forEach((key, ref) => resMap(key) = (ref ? cmd).mapTo[CMDResInfo])
+      inMemoryHostedChannels.forEach((key, value) => resMap(key) = (value._2 ? cmd).mapTo[CMDResInfo])
 
       val collected = Future.traverse(resMap.toList)((value) => value._2.map(x => (value._1.toString(), x))).map(xs => CMDAllInfo(Map.from(xs)))
       collected.pipeTo(sender())
 
     case Terminated(channelRef) =>
-      inMemoryHostedChannels.inverse.remove(channelRef)
+      inMemoryHostedChannels.forEach((key, value) => if (value._2 == channelRef) {
+        inMemoryHostedChannels.remove(key)
+      } )
 
     case TickRemoveIdleChannels =>
       logger.info(s"PLGN FC, in-memory HC#=${inMemoryHostedChannels.size}")
-      inMemoryHostedChannels.values.forEach(_ ! TickRemoveIdleChannels)
+      inMemoryHostedChannels.values.forEach(_._2 ! TickRemoveIdleChannels)
 
     case SyncProgress(1D) if clientChannelRemoteNodeIds.isEmpty =>
       // We need a fully loaded graph to find Host IP addresses and ports
@@ -186,7 +191,7 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, c
   def spawnChannel(nodeId: PublicKey, ticker: Ticker): ActorRef = {
     val spawnedChannelProps = Props(classOf[HostedChannel], kit, nodeId, ticker, channelsDb, hostedSync, cfg)
     val channelRef = context watch context.actorOf(spawnedChannelProps)
-    inMemoryHostedChannels.put(nodeId, channelRef)
+    inMemoryHostedChannels.put(nodeId, (ticker, channelRef))
     channelRef
   }
 
@@ -203,8 +208,14 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, c
     channel
   }
 
-  def restore(onNotFound: => Unit, onFound: ActorRef => Unit)(nodeId: PublicKey): Unit =
-    channelsDb.getChannelByRemoteNodeId(nodeId).map(spawnPreparedChannel) match {
+  def restore(onNotFound: => Unit, onFound: ActorRef => Unit)(nodeId: PublicKey, ticker: Ticker): Unit =
+    channelsDb.getChannelByRemoteNodeId(nodeId, ticker).map(spawnPreparedChannel) match {
+      case Some(channelRef) => onFound(channelRef)
+      case None => onNotFound
+    }
+
+  def restoreByChanId(onNotFound: => Unit, onFound: ActorRef => Unit)(chanId: ByteVector32): Unit =
+    channelsDb.getChannelByChanId(chanId).map(spawnPreparedChannel) match {
       case Some(channelRef) => onFound(channelRef)
       case None => onNotFound
     }

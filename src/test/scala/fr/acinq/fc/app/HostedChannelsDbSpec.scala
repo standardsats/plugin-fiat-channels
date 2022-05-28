@@ -25,12 +25,12 @@ class HostedChannelsDbSpec extends AnyFunSuite {
 
     cdb.updateOrAddNewChannel(data) // Insert
     cdb.updateOrAddNewChannel(data) // Update
-    assert(!cdb.getChannelByRemoteNodeId(hdc.remoteNodeId).head.commitments.announceChannel)
+    assert(!cdb.getChannelByRemoteNodeId(hdc.remoteNodeId, USD_TICKER).head.commitments.announceChannel)
 
     val data1 = data.copy(commitments = hdc.copy(announceChannel = true)) // Channel becomes public
 
     cdb.updateOrAddNewChannel(data1) // Update
-    assert(cdb.getChannelByRemoteNodeId(hdc.remoteNodeId).head.commitments.announceChannel) // channelId is the same, but announce updated
+    assert(cdb.getChannelByRemoteNodeId(hdc.remoteNodeId, USD_TICKER).head.commitments.announceChannel) // channelId is the same, but announce updated
 
     val data2 = data1.copy(commitments = hdc.copy(remoteNodeId = randomKey.publicKey,
       channelId = randomBytes32)) // Different remote NodeId, but shortId is the same (which is theoretically possible)
@@ -39,7 +39,7 @@ class HostedChannelsDbSpec extends AnyFunSuite {
       def insert(data: HC_DATA_ESTABLISHED): Boolean = cdb.addNewChannel(data)
     }
 
-    assert(cdb.getChannelByRemoteNodeId(data2.commitments.remoteNodeId).isEmpty) // Such a channel could not be found
+    assert(cdb.getChannelByRemoteNodeId(data2.commitments.remoteNodeId, USD_TICKER).isEmpty) // Such a channel could not be found
     assert(Failure(DuplicateShortId) == insertOrFail.execute(data2)) // New channel could not be created because of existing shortId
   }
 
@@ -54,7 +54,7 @@ class HostedChannelsDbSpec extends AnyFunSuite {
 
     cdb.updateOrAddNewChannel(data1)
     assert(cdb.getChannelBySecret(secret).isEmpty)
-    assert(cdb.updateSecretById(data1.commitments.remoteNodeId, secret))
+    assert(cdb.updateSecretById(data1.commitments.remoteNodeId, data1.commitments.lastCrossSignedState.initHostedChannel.ticker, secret))
     assert(cdb.getChannelBySecret(secret).get == data1)
   }
 

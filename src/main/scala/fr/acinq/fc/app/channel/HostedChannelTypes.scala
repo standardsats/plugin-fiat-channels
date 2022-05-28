@@ -28,29 +28,30 @@ case class HostedState(nodeId1: PublicKey, nodeId2: PublicKey, lastCrossSignedSt
 
 sealed trait HasRemoteNodeIdHostedCommand {
   def remoteNodeId: PublicKey
+  def ticker: Ticker
 }
 
-case class HC_CMD_LOCAL_INVOKE(remoteNodeId: PublicKey, refundScriptPubKey: ByteVector, secret: ByteVector, ticker: Ticker) extends HasRemoteNodeIdHostedCommand
+case class HC_CMD_LOCAL_INVOKE(remoteNodeId: PublicKey, ticker: Ticker, refundScriptPubKey: ByteVector, secret: ByteVector) extends HasRemoteNodeIdHostedCommand
 
-case class HC_CMD_EXTERNAL_FULFILL(remoteNodeId: PublicKey, htlcId: Long, paymentPreimage: ByteVector32) extends HasRemoteNodeIdHostedCommand
+case class HC_CMD_EXTERNAL_FULFILL(remoteNodeId: PublicKey, ticker: Ticker, htlcId: Long, paymentPreimage: ByteVector32) extends HasRemoteNodeIdHostedCommand
 
-case class HC_CMD_OVERRIDE_PROPOSE(remoteNodeId: PublicKey, newLocalBalance: MilliSatoshi) extends HasRemoteNodeIdHostedCommand
-case class HC_CMD_OVERRIDE_ACCEPT(remoteNodeId: PublicKey) extends HasRemoteNodeIdHostedCommand
+case class HC_CMD_OVERRIDE_PROPOSE(remoteNodeId: PublicKey, ticker: Ticker, newLocalBalance: MilliSatoshi) extends HasRemoteNodeIdHostedCommand
+case class HC_CMD_OVERRIDE_ACCEPT(remoteNodeId: PublicKey, ticker: Ticker) extends HasRemoteNodeIdHostedCommand
 
-case class HC_CMD_PUBLIC(remoteNodeId: PublicKey, force: Boolean = false) extends HasRemoteNodeIdHostedCommand
-case class HC_CMD_PRIVATE(remoteNodeId: PublicKey) extends HasRemoteNodeIdHostedCommand
+case class HC_CMD_PUBLIC(remoteNodeId: PublicKey, ticker: Ticker, force: Boolean = false) extends HasRemoteNodeIdHostedCommand
+case class HC_CMD_PRIVATE(remoteNodeId: PublicKey, ticker: Ticker) extends HasRemoteNodeIdHostedCommand
 
-case class HC_CMD_RESIZE(remoteNodeId: PublicKey, newCapacity: Satoshi) extends HasRemoteNodeIdHostedCommand
+case class HC_CMD_RESIZE(remoteNodeId: PublicKey, ticker: Ticker, newCapacity: Satoshi) extends HasRemoteNodeIdHostedCommand
 
 // Increase balance and capacity to match fiat balance
-case class HC_CMD_MARGIN(remoteNodeId: PublicKey, newCapacity: Satoshi, newRate: MilliSatoshi) extends HasRemoteNodeIdHostedCommand
+case class HC_CMD_MARGIN(remoteNodeId: PublicKey, ticker: Ticker, newCapacity: Satoshi, newRate: MilliSatoshi) extends HasRemoteNodeIdHostedCommand
 
-case class HC_CMD_RESTORE(remoteNodeId: PublicKey, remoteData: HostedState) extends HasRemoteNodeIdHostedCommand
+case class HC_CMD_RESTORE(remoteNodeId: PublicKey, ticker: Ticker, remoteData: HostedState) extends HasRemoteNodeIdHostedCommand
 
 case class HC_CMD_GET_ALL_CHANNELS()
-case class HC_CMD_GET_INFO(remoteNodeId: PublicKey) extends HasRemoteNodeIdHostedCommand
+case class HC_CMD_GET_INFO(remoteNodeId: PublicKey, ticker: Ticker) extends HasRemoteNodeIdHostedCommand
 
-case class HC_CMD_SUSPEND(remoteNodeId: PublicKey) extends HasRemoteNodeIdHostedCommand
+case class HC_CMD_SUSPEND(remoteNodeId: PublicKey, ticker: Ticker) extends HasRemoteNodeIdHostedCommand
 
 sealed trait HCCommandResponse
 

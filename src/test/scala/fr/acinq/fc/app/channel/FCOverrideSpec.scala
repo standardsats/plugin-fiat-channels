@@ -6,6 +6,7 @@ import fr.acinq.eclair.transactions.DirectedHtlc
 import fr.acinq.eclair.blockchain.CurrentBlockHeight
 import fr.acinq.bitcoin.{ByteVector32, ByteVector64}
 import fr.acinq.eclair.wire.protocol.{ChannelUpdate, UpdateFailHtlc, UpdateFulfillHtlc}
+import fr.acinq.fc.app.Ticker.USD_TICKER
 import fr.acinq.fc.app.{HCTestUtils, InvokeHostedChannel, LastCrossSignedState, StateOverride, StateUpdate, Worker}
 import org.scalatest.funsuite.FixtureAnyFunSuiteLike
 import scodec.bits.ByteVector
@@ -22,9 +23,9 @@ class FCOverrideSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike with F
     HCTestUtils.resetEntireDatabase(aliceDB)
     HCTestUtils.resetEntireDatabase(bobDB)
     reachNormal(f)
-    alice ! HC_CMD_OVERRIDE_PROPOSE(bobKit.nodeParams.nodeId, newLocalBalance = 9999899999L.msat)
+    alice ! HC_CMD_OVERRIDE_PROPOSE(bobKit.nodeParams.nodeId, USD_TICKER, newLocalBalance = 9999899999L.msat)
     alice2bob.expectNoMessage()
-    bob ! HC_CMD_OVERRIDE_ACCEPT(aliceKit.nodeParams.nodeId)
+    bob ! HC_CMD_OVERRIDE_ACCEPT(aliceKit.nodeParams.nodeId, USD_TICKER)
     bob2alice.expectNoMessage()
     awaitCond(alice.stateName == NORMAL)
     awaitCond(bob.stateName == NORMAL)
@@ -48,14 +49,14 @@ class FCOverrideSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike with F
     awaitCond(bob.stateName == CLOSED)
     assert(alice.stateData.asInstanceOf[HC_DATA_ESTABLISHED].localErrors.nonEmpty)
     assert(bob.stateData.asInstanceOf[HC_DATA_ESTABLISHED].remoteError.isDefined)
-    alice ! HC_CMD_OVERRIDE_PROPOSE(bobKit.nodeParams.nodeId, newLocalBalance = 9999899999L.msat)
+    alice ! HC_CMD_OVERRIDE_PROPOSE(bobKit.nodeParams.nodeId, USD_TICKER, newLocalBalance = 9999899999L.msat)
     bob ! alice2bob.expectMsgType[StateOverride].copy(localSigOfRemoteLCSS = ByteVector64.Zeroes) // Wrong signature
-    bob ! HC_CMD_OVERRIDE_ACCEPT(aliceKit.nodeParams.nodeId)
+    bob ! HC_CMD_OVERRIDE_ACCEPT(aliceKit.nodeParams.nodeId, USD_TICKER)
     bob2alice.expectNoMessage()
     // Second try
-    alice ! HC_CMD_OVERRIDE_PROPOSE(bobKit.nodeParams.nodeId, newLocalBalance = 9999899999L.msat)
+    alice ! HC_CMD_OVERRIDE_PROPOSE(bobKit.nodeParams.nodeId, USD_TICKER, newLocalBalance = 9999899999L.msat)
     bob ! alice2bob.expectMsgType[StateOverride] // Correct this time
-    bob ! HC_CMD_OVERRIDE_ACCEPT(aliceKit.nodeParams.nodeId)
+    bob ! HC_CMD_OVERRIDE_ACCEPT(aliceKit.nodeParams.nodeId, USD_TICKER)
     alice ! bob2alice.expectMsgType[StateUpdate]
     awaitCond(alice.stateName == NORMAL)
     awaitCond(bob.stateName == NORMAL)
@@ -86,7 +87,7 @@ class FCOverrideSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike with F
     bob ! Worker.HCPeerDisconnected
     awaitCond(alice.stateName == OFFLINE)
     awaitCond(bob.stateName == OFFLINE)
-    alice ! HC_CMD_OVERRIDE_PROPOSE(bobKit.nodeParams.nodeId, newLocalBalance = 9999899999L.msat)
+    alice ! HC_CMD_OVERRIDE_PROPOSE(bobKit.nodeParams.nodeId, USD_TICKER, newLocalBalance = 9999899999L.msat)
     bob ! alice2bob.expectMsgType[StateOverride] // Bob did not get it because he's offline
     awaitCond(bob.stateData.asInstanceOf[HC_DATA_ESTABLISHED].overrideProposal.isEmpty)
     bob ! Worker.HCPeerConnected
@@ -97,7 +98,7 @@ class FCOverrideSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike with F
     alice2bob.expectNoMessage()
     awaitCond(alice.stateName == CLOSED)
     awaitCond(bob.stateName == CLOSED)
-    bob ! HC_CMD_OVERRIDE_ACCEPT(aliceKit.nodeParams.nodeId)
+    bob ! HC_CMD_OVERRIDE_ACCEPT(aliceKit.nodeParams.nodeId, USD_TICKER)
     alice ! bob2alice.expectMsgType[StateUpdate]
     assert(aliceRelayer.expectMsgType[RES_ADD_SETTLED[_, _]].htlc.paymentHash == alice2bobUpdateAdd1.paymentHash)
     aliceRelayer.expectNoMessage()
@@ -139,9 +140,9 @@ class FCOverrideSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike with F
     bob ! alice2bob.expectMsgType[wire.protocol.Error] // Fulfill rejected
     aliceRelayer.expectNoMessage()
     assert(alice.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.nextLocalSpec.htlcs.collect(DirectedHtlc.outgoing).isEmpty)
-    alice ! HC_CMD_OVERRIDE_PROPOSE(bobKit.nodeParams.nodeId, newLocalBalance = 9999899999L.msat)
+    alice ! HC_CMD_OVERRIDE_PROPOSE(bobKit.nodeParams.nodeId, USD_TICKER, newLocalBalance = 9999899999L.msat)
     bob ! alice2bob.expectMsgType[StateOverride]
-    bob ! HC_CMD_OVERRIDE_ACCEPT(aliceKit.nodeParams.nodeId)
+    bob ! HC_CMD_OVERRIDE_ACCEPT(aliceKit.nodeParams.nodeId, USD_TICKER)
     alice ! bob2alice.expectMsgType[StateUpdate]
     awaitCond(alice.stateName == NORMAL)
     awaitCond(bob.stateName == NORMAL)
@@ -172,9 +173,9 @@ class FCOverrideSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike with F
     aliceRelayer.expectMsgType[RES_ADD_SETTLED[_, _]] // Alice fulfills right away
     assert(alice.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.nextLocalSpec.htlcs.collect(DirectedHtlc.outgoing).isEmpty)
     assert(alice.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.nextLocalSpec.toLocal == 9999700000L.msat)
-    alice ! HC_CMD_OVERRIDE_PROPOSE(bobKit.nodeParams.nodeId, newLocalBalance = 9999700000L.msat)
+    alice ! HC_CMD_OVERRIDE_PROPOSE(bobKit.nodeParams.nodeId, USD_TICKER, newLocalBalance = 9999700000L.msat)
     bob ! alice2bob.expectMsgType[StateOverride]
-    bob ! HC_CMD_OVERRIDE_ACCEPT(aliceKit.nodeParams.nodeId)
+    bob ! HC_CMD_OVERRIDE_ACCEPT(aliceKit.nodeParams.nodeId, USD_TICKER)
     alice ! bob2alice.expectMsgType[StateUpdate]
     awaitCond(alice.stateName == NORMAL)
     awaitCond(bob.stateName == NORMAL)
@@ -204,9 +205,9 @@ class FCOverrideSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike with F
     bob ! alice2bob.expectMsgType[wire.protocol.Error]
     awaitCond(alice.stateName == CLOSED)
     awaitCond(bob.stateName == CLOSED)
-    alice ! HC_CMD_OVERRIDE_PROPOSE(bobKit.nodeParams.nodeId, newLocalBalance = 10000000000L.msat)
+    alice ! HC_CMD_OVERRIDE_PROPOSE(bobKit.nodeParams.nodeId, USD_TICKER, newLocalBalance = 10000000000L.msat)
     bob ! alice2bob.expectMsgType[StateOverride]
-    bob ! HC_CMD_OVERRIDE_ACCEPT(aliceKit.nodeParams.nodeId)
+    bob ! HC_CMD_OVERRIDE_ACCEPT(aliceKit.nodeParams.nodeId, USD_TICKER)
     alice ! bob2alice.expectMsgType[StateUpdate]
     awaitCond(alice.stateName == NORMAL)
     awaitCond(bob.stateName == NORMAL)

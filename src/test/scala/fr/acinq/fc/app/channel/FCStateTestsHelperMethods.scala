@@ -86,7 +86,7 @@ trait FCStateTestsHelperMethods extends TestKitBase with FixtureTestSuite with P
     alice ! Worker.HCPeerConnected
     awaitCond(bob.stateName == SYNCING)
     awaitCond(alice.stateName == SYNCING)
-    bob ! HC_CMD_LOCAL_INVOKE(aliceKit.nodeParams.nodeId, Bob.channelParams.defaultFinalScriptPubKey, ByteVector32.Zeroes, USD_TICKER)
+    bob ! HC_CMD_LOCAL_INVOKE(aliceKit.nodeParams.nodeId, USD_TICKER, Bob.channelParams.defaultFinalScriptPubKey, ByteVector32.Zeroes)
     awaitCond(bob.stateData.isInstanceOf[HC_DATA_CLIENT_WAIT_HOST_INIT])
     alice ! bob2alice.expectMsgType[InvokeHostedChannel]
     awaitCond(alice.stateData.isInstanceOf[HC_DATA_HOST_WAIT_CLIENT_STATE_UPDATE])
@@ -108,11 +108,11 @@ trait FCStateTestsHelperMethods extends TestKitBase with FixtureTestSuite with P
 
   def announcePHC(setup: SetupFixture): Unit = {
     import setup._
-    bob ! HC_CMD_PUBLIC(aliceKit.nodeParams.nodeId, force = true)
+    bob ! HC_CMD_PUBLIC(aliceKit.nodeParams.nodeId, USD_TICKER, force = true)
     alice ! bob2alice.expectMsgType[AnnouncementSignature]
     channelUpdateListener.expectMsgType[LocalChannelUpdate]
     alice2bob.expectNoMessage() // Alice does not react since she did not issue a local HC_CMD_PUBLIC command
-    alice ! HC_CMD_PUBLIC(bobKit.nodeParams.nodeId, force = true)
+    alice ! HC_CMD_PUBLIC(bobKit.nodeParams.nodeId, USD_TICKER, force = true)
     bob ! alice2bob.expectMsgType[AnnouncementSignature]
     channelUpdateListener.expectMsgType[LocalChannelUpdate]
     bobSync.expectMsgType[UnknownMessage]

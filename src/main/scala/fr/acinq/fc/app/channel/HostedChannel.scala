@@ -95,7 +95,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
   }
 
   when(SYNCING) {
-    case Event(cmd @ HC_CMD_LOCAL_INVOKE(_, scriptPubKey, secret, ticker), HC_NOTHING) =>
+    case Event(cmd @ HC_CMD_LOCAL_INVOKE(_, ticker, scriptPubKey, secret), HC_NOTHING) =>
       val invokeMsg = InvokeHostedChannel(kit.nodeParams.chainHash, scriptPubKey, secret, ticker)
       stay using HC_DATA_CLIENT_WAIT_HOST_INIT(scriptPubKey) SendingHosted invokeMsg replying CMDResSuccess(cmd)
 
@@ -142,12 +142,12 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
       else {
         dh.execute(data1) match {
           case Failure(DuplicateShortId) =>
-            log.info(s"PLGN FC, DuplicateShortId when storing new HC, peer=$remoteNodeId")
+            log.info(s"PLGN FC, DuplicateShortId when storing new HC, peer=$remoteNodeId, ticker=$ticker, shortId=$shortChannelId, dbShortId=${data1.channelUpdate.shortChannelId}")
             stop(FSM.Normal) SendingHasChannelId Error(channelId, ErrorCodes.ERR_HOSTED_CHANNEL_DENIED)
 
           case Success(true) =>
             log.info(s"PLGN FC, stored new HC with peer=$remoteNodeId")
-            channelsDb.updateSecretById(remoteNodeId, data.invoke.finalSecret)
+            channelsDb.updateSecretById(remoteNodeId, data.invoke.ticker, data.invoke.finalSecret)
             goto(NORMAL) using data1 SendingHosted fullySignedLCSS.stateUpdate
 
           case _ =>
@@ -266,7 +266,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
         stay
       }
 
-    case Event(HC_CMD_PUBLIC(remoteNodeId, false), data: HC_DATA_ESTABLISHED) =>
+    case Event(HC_CMD_PUBLIC(remoteNodeId, ticker, false), data: HC_DATA_ESTABLISHED) =>
       val syncData = Await.result(hostedSync ? HostedSync.GetHostedSyncData, span).asInstanceOf[OperationalData]
       val notEnoughNormalChannels = syncData.tooFewNormalChans(kit.nodeParams.nodeId, remoteNodeId, cfg.vals.phcConfig)
       val tooManyPublicHostedChannels = syncData.phcNetwork.tooManyPHCs(kit.nodeParams.nodeId, remoteNodeId, cfg.vals.phcConfig)
@@ -274,7 +274,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
       else if (notEnoughNormalChannels.isDefined) stay replying CMDResFailure(s"Can't proceed: nodeId=${notEnoughNormalChannels.get} has too few normal channels, min=${cfg.vals.phcConfig.minNormalChans}")
       else if (cfg.vals.phcConfig.minCapacity > data.commitments.capacity) stay replying CMDResFailure(s"Can't proceed: HC capacity is below min=${cfg.vals.phcConfig.minCapacity}")
       else if (cfg.vals.phcConfig.maxCapacity < data.commitments.capacity) stay replying CMDResFailure(s"Can't proceed: HC capacity is above max=${cfg.vals.phcConfig.maxCapacity}")
-      else stay Receiving HC_CMD_PUBLIC(remoteNodeId, force = true)
+      else stay Receiving HC_CMD_PUBLIC(remoteNodeId, ticker, force = true)
 
     case Event(cmd: HC_CMD_PUBLIC, data: HC_DATA_ESTABLISHED) =>
       val data1 = data.modify(_.commitments.announceChannel).setTo(true).copy(channelAnnouncement = None)
@@ -460,7 +460,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
 
     case Event(PreimageBroadcastCatcher.BroadcastedPreimage(hash, preimage), data: HC_DATA_ESTABLISHED) =>
       // We have a preimage, but we also need a payment id to fulfill it properly, see if we have any pending payments with given hash
-      val toFulfillCmd: UpdateAddHtlc => HC_CMD_EXTERNAL_FULFILL = add => HC_CMD_EXTERNAL_FULFILL(remoteNodeId, add.id, preimage)
+      val toFulfillCmd: UpdateAddHtlc => HC_CMD_EXTERNAL_FULFILL = add => HC_CMD_EXTERNAL_FULFILL(remoteNodeId, data.commitments.lastCrossSignedState.initHostedChannel.ticker, add.id, preimage)
       data.outgoingHtlcsByHash(hash).map(toFulfillCmd).foreach(externalFulfillCmd => self ! externalFulfillCmd)
       stay
 

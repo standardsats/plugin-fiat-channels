@@ -34,7 +34,7 @@ class FCEstablishmentSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike w
     alice ! Worker.HCPeerConnected
     awaitCond(bob.stateName == SYNCING)
     awaitCond(alice.stateName == SYNCING)
-    bob ! HC_CMD_LOCAL_INVOKE(aliceKit.nodeParams.nodeId, refundScriptPubKey = ByteVector32.Zeroes, ByteVector32.Zeroes, USD_TICKER)
+    bob ! HC_CMD_LOCAL_INVOKE(aliceKit.nodeParams.nodeId, USD_TICKER, refundScriptPubKey = ByteVector32.Zeroes, ByteVector32.Zeroes)
     awaitCond(bob.stateData.isInstanceOf[HC_DATA_CLIENT_WAIT_HOST_INIT])
     alice ! bob2alice.expectMsgType[InvokeHostedChannel]
     bob ! alice2bob.expectMsgType[wire.protocol.Error]
@@ -50,7 +50,7 @@ class FCEstablishmentSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike w
     alice ! Worker.HCPeerConnected
     awaitCond(bob.stateName == SYNCING)
     awaitCond(alice.stateName == SYNCING)
-    bob ! HC_CMD_LOCAL_INVOKE(aliceKit.nodeParams.nodeId, Bob.channelParams.defaultFinalScriptPubKey, ByteVector32.Zeroes, USD_TICKER)
+    bob ! HC_CMD_LOCAL_INVOKE(aliceKit.nodeParams.nodeId, USD_TICKER, Bob.channelParams.defaultFinalScriptPubKey, ByteVector32.Zeroes)
     awaitCond(bob.stateData.isInstanceOf[HC_DATA_CLIENT_WAIT_HOST_INIT])
     alice ! bob2alice.expectMsgType[InvokeHostedChannel]
     awaitCond(alice.stateData.isInstanceOf[HC_DATA_HOST_WAIT_CLIENT_STATE_UPDATE])
@@ -78,7 +78,7 @@ class FCEstablishmentSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike w
     alice ! Worker.HCPeerConnected
     awaitCond(bob.stateName == SYNCING)
     awaitCond(alice.stateName == SYNCING)
-    bob ! HC_CMD_LOCAL_INVOKE(aliceKit.nodeParams.nodeId, Bob.channelParams.defaultFinalScriptPubKey, ByteVector32.Zeroes, USD_TICKER)
+    bob ! HC_CMD_LOCAL_INVOKE(aliceKit.nodeParams.nodeId, USD_TICKER, Bob.channelParams.defaultFinalScriptPubKey, ByteVector32.Zeroes)
     awaitCond(bob.stateData.isInstanceOf[HC_DATA_CLIENT_WAIT_HOST_INIT])
     alice ! bob2alice.expectMsgType[InvokeHostedChannel]
     awaitCond(alice.stateData.isInstanceOf[HC_DATA_HOST_WAIT_CLIENT_STATE_UPDATE])

@@ -189,13 +189,13 @@ class FC extends Plugin with RouteProvider {
     val invoke: Route = postRequest("fc-invoke") { implicit t =>
       formFields("refundAddress", "secret".as[ByteVector](binaryDataUnmarshaller), nodeIdFormParam, tickerParam) { case (refundAddress, secret, remoteNodeId, ticker) =>
         val refundPubkeyScript = Script.write(fr.acinq.eclair.addressToPublicKeyScript(refundAddress, kit.nodeParams.chainHash))
-        completeCommand(HC_CMD_LOCAL_INVOKE(remoteNodeId, refundPubkeyScript, secret, ticker))
+        completeCommand(HC_CMD_LOCAL_INVOKE(remoteNodeId, ticker, refundPubkeyScript, secret))
       }
     }
 
     val externalFulfill: Route = postRequest("fc-externalfulfill") { implicit t =>
-      formFields("htlcId".as[Long], "paymentPreimage".as[ByteVector32], nodeIdFormParam) { case (htlcId, paymentPreimage, remoteNodeId) =>
-        completeCommand(HC_CMD_EXTERNAL_FULFILL(remoteNodeId, htlcId, paymentPreimage))
+      formFields("htlcId".as[Long], "paymentPreimage".as[ByteVector32], nodeIdFormParam, tickerParam) { case (htlcId, paymentPreimage, remoteNodeId, ticker) =>
+        completeCommand(HC_CMD_EXTERNAL_FULFILL(remoteNodeId, ticker, htlcId, paymentPreimage))
       }
     }
 
@@ -215,50 +215,50 @@ class FC extends Plugin with RouteProvider {
     }
 
     val findByRemoteId: Route = postRequest("fc-findbyremoteid") { implicit t =>
-      formFields(nodeIdFormParam) { remoteNodeId =>
-        completeCommand(HC_CMD_GET_INFO(remoteNodeId))
+      formFields(nodeIdFormParam, tickerParam) { (remoteNodeId, ticker) =>
+        completeCommand(HC_CMD_GET_INFO(remoteNodeId, ticker))
       }
     }
 
     val overridePropose: Route = postRequest("fc-overridepropose") { implicit t =>
-      formFields("newLocalBalanceMsat".as[MilliSatoshi], nodeIdFormParam) { case (newLocalBalance, remoteNodeId) =>
-        completeCommand(HC_CMD_OVERRIDE_PROPOSE(remoteNodeId, newLocalBalance))
+      formFields("newLocalBalanceMsat".as[MilliSatoshi], nodeIdFormParam, tickerParam) { case (newLocalBalance, remoteNodeId, ticker) =>
+        completeCommand(HC_CMD_OVERRIDE_PROPOSE(remoteNodeId, ticker, newLocalBalance))
       }
     }
 
     val overrideAccept: Route = postRequest("fc-overrideaccept") { implicit t =>
-      formFields(nodeIdFormParam) { remoteNodeId =>
-        completeCommand(HC_CMD_OVERRIDE_ACCEPT(remoteNodeId))
+      formFields(nodeIdFormParam, tickerParam) { (remoteNodeId, ticker) =>
+        completeCommand(HC_CMD_OVERRIDE_ACCEPT(remoteNodeId, ticker))
       }
     }
 
     val makePublic: Route = postRequest("fc-makepublic") { implicit t =>
-      formFields(nodeIdFormParam) { remoteNodeId =>
-        completeCommand(HC_CMD_PUBLIC(remoteNodeId))
+      formFields(nodeIdFormParam, tickerParam) { (remoteNodeId, ticker) =>
+        completeCommand(HC_CMD_PUBLIC(remoteNodeId, ticker))
       }
     }
 
     val makePrivate: Route = postRequest("fc-makeprivate") { implicit t =>
-      formFields(nodeIdFormParam) { remoteNodeId =>
-        completeCommand(HC_CMD_PRIVATE(remoteNodeId))
+      formFields(nodeIdFormParam, tickerParam) { (remoteNodeId, ticker) =>
+        completeCommand(HC_CMD_PRIVATE(remoteNodeId, ticker))
       }
     }
 
     val resize: Route = postRequest("fc-resize") { implicit t =>
-      formFields("newCapacitySat".as[Satoshi], nodeIdFormParam) { case (newCapacity, remoteNodeId) =>
-        completeCommand(HC_CMD_RESIZE(remoteNodeId, newCapacity))
+      formFields("newCapacitySat".as[Satoshi], nodeIdFormParam, tickerParam) { case (newCapacity, remoteNodeId, ticker) =>
+        completeCommand(HC_CMD_RESIZE(remoteNodeId, ticker, newCapacity))
       }
     }
 
     val margin: Route = postRequest("fc-margin") { implicit t =>
-      formFields("newCapacitySat".as[Satoshi], "newRate".as[MilliSatoshi], nodeIdFormParam) { case (newCapacity, newRate, remoteNodeId) =>
-        completeCommand(HC_CMD_MARGIN(remoteNodeId, newCapacity, newRate))
+      formFields("newCapacitySat".as[Satoshi], "newRate".as[MilliSatoshi], nodeIdFormParam, tickerParam) { case (newCapacity, newRate, remoteNodeId, ticker) =>
+        completeCommand(HC_CMD_MARGIN(remoteNodeId, ticker, newCapacity, newRate))
       }
     }
 
     val suspend: Route = postRequest("fc-suspend") { implicit t =>
-      formFields(nodeIdFormParam) { remoteNodeId =>
-        completeCommand(HC_CMD_SUSPEND(remoteNodeId))
+      formFields(nodeIdFormParam, tickerParam) { (remoteNodeId, tickerParam) =>
+        completeCommand(HC_CMD_SUSPEND(remoteNodeId, tickerParam))
       }
     }
 
@@ -272,7 +272,7 @@ class FC extends Plugin with RouteProvider {
       formFields(hostedStateUnmarshaller) { state =>
         val RemoteHostedStateResult(remoteState, Some(remoteNodeId), isLocalSigOk) = getHostedStateResult(state)
         require(isLocalSigOk, "Can't proceed: local signature of provided HC state is invalid")
-        completeCommand(HC_CMD_RESTORE(remoteNodeId, remoteState))
+        completeCommand(HC_CMD_RESTORE(remoteNodeId, remoteState.lastCrossSignedState.initHostedChannel.ticker, remoteState))
       }
     }
 
