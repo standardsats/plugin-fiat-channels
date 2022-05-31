@@ -356,3 +356,6 @@ case class HostedCommitments(localNodeId: PublicKey, remoteNodeId: PublicKey, ch
 case class EmptyFailReason(override val channelId: ByteVector32) extends ChannelException(channelId, "empty fail reason from remote peer")
 
 case class UnsignedHtlcResolve(override val channelId: ByteVector32) extends ChannelException(channelId, "unsigned HTLC resolution attempt from remote peer")
+
+case class MissingHtlcRateException(override val channelId: ByteVector32) extends ChannelException(channelId, "there is no HTLC rate in TLV stream")
+case class WrongHtlcRateTickerException(override val channelId: ByteVector32) extends ChannelException(channelId, "there is wrong ticker in the TLV stream")

@@ -16,13 +16,17 @@ import fr.acinq.eclair.payment.relay.Relayer
 import fr.acinq.eclair.router.Announcements
 import fr.acinq.eclair.transactions.{CommitmentSpec, DirectedHtlc, IncomingHtlc, OutgoingHtlc}
 import fr.acinq.eclair.wire.internal.channel.version3.FCProtocolCodecs
+import fr.acinq.eclair.wire.internal.channel.version3.FCProtocolCodecs.tlvRateCodec
 import fr.acinq.eclair.wire.protocol._
+import fr.acinq.fc.app.FC.TLV_RATE_TAG
 import fr.acinq.fc.app.Tools.{DuplicateHandler, DuplicateShortId}
 import fr.acinq.fc.app._
 import fr.acinq.fc.app.db.Blocking.{span, timeout}
 import fr.acinq.fc.app.db.HostedChannelsDb
 import fr.acinq.fc.app.network.{HostedSync, OperationalData, PHC, PreimageBroadcastCatcher}
 import fr.acinq.fc.app.rate.{CentralBankOracle, RateOracle}
+import scodec.Attempt
+import scodec.Attempt.Successful
 import scodec.bits.ByteVector
 
 import java.util.UUID
@@ -298,7 +302,28 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
 
     case Event(add: UpdateAddHtlc, data: HC_DATA_ESTABLISHED) =>
       log.info(s"Received UpdateAddHtlc for amount ${add.amountMsat} msat")
-      processRemoteResolve(data.commitments.receiveAdd(add), data)
+      RateOracle.getCurrentRate(ticker) match {
+        case Some(oracleRate) => validateHtlcRate(add.channelId, ticker, add.tlvStream, oracleRate) match {
+          case Right(rate) => {
+            log.info(s"Fixed rate is $rate msat/${ticker.tag}")
+            processRemoteResolve(data.commitments.receiveAdd(add), data)
+          }
+          case Left(_) => {
+            val disconnect = Peer.Disconnect(remoteNodeId)
+            val peer = FC.remoteNode2Connection.get(remoteNodeId)
+            log.info(s"PLGN PHC, invalid HTLC price, force-disconnecting peer=$remoteNodeId")
+            peer.foreach(_.info.peer ! disconnect)
+            goto(OFFLINE) StoringAndUsing data
+          }
+        }
+        case _ => {
+          val disconnect = Peer.Disconnect(remoteNodeId)
+          val peer = FC.remoteNode2Connection.get(remoteNodeId)
+          log.info(s"PLGN PHC, missing oracle price, force-disconnecting peer=$remoteNodeId")
+          peer.foreach(_.info.peer ! disconnect)
+          goto(OFFLINE) StoringAndUsing data
+        }
+      }
 
     case Event(fail: UpdateFailHtlc, data: HC_DATA_ESTABLISHED) => processRemoteResolve(data.commitments.receiveFail(fail), data)
 
@@ -863,9 +888,13 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
       if(delta != 0.msat) {
         RateOracle.getCurrentRate(ticker) match {
           case Some(oracleRate) => {
-              val eurPrice = CentralBankOracle.getCurrentRate()
-              // Warning: crossRate is relevant for EUR channels only
-              val crossRate = (math round (oracleRate.toLong / eurPrice)).msat
+              val crossRate = ticker match {
+                case USD() => oracleRate
+                case EUR() => {
+                  val eurPrice = CentralBankOracle.getCurrentRate()
+                  (math round (oracleRate.toLong / eurPrice)).msat
+                }
+              }
               context.system.eventStream publish FCHedgeLiability(shortChannelId.toString(), delta, crossRate)
           }
           case None =>
@@ -880,5 +909,38 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
   private def replyToCommand(reply: CommandResponse[Command], cmd: Command): Unit = cmd match {
     case cmd1: HasReplyToCommand => if (cmd1.replyTo == ActorRef.noSender) sender ! reply else cmd1.replyTo ! reply
     case cmd1: HasOptionalReplyToCommand => cmd1.replyTo_opt.foreach(_ ! reply)
+  }
+
+  def getHtlcRate(tlvStream: TlvStream[_]): Either[ChannelException, TlvRate] = {
+    tlvStream.unknown.find(p => p.tag == TLV_RATE_TAG) match {
+      case Some(p) => tlvRateCodec.decode(p.value.toBitVector).map(_.value) match {
+        case Attempt.Successful(value) => Right(value)
+        case Attempt.Failure(cause) => {
+          log.error(s"PLGN PHC, invalid rate format in TLV stream in HTLC: $cause")
+          Left(MissingHtlcRateException(channelId))
+        }
+      }
+      case None => {
+        log.error(s"PLGN PHC, missing rate in TLV stream in HTLC")
+        Left(MissingHtlcRateException(channelId))
+      }
+    }
+  }
+
+  def validateHtlcRate(channelId: ByteVector32, ticker: Ticker, tlvStream: TlvStream[_], oracleRate: MilliSatoshi): Either[ChannelException, MilliSatoshi] = {
+    getHtlcRate(tlvStream).flatMap(value => {
+      log.info(s"PLGN PHC, rate in TLV: $value")
+      if (value.ticker == ticker) {
+        if (value.rate.toLong.toDouble >= oracleRate.toLong.toDouble * (1 - FC.TLV_TOLERANCE) ) {
+          Right(value.rate)
+        } else {
+          log.error(s"PLGN PHC, rate in HTLC is to low: ${value.rate} but expected $oracleRate")
+          Left(WrongHtlcRateTickerException(channelId))
+        }
+      } else {
+        log.error(s"PLGN PHC, wrong ticker in TLV stream in HTLC: ${value.ticker} but expected $ticker")
+        Left(WrongHtlcRateTickerException(channelId))
+      }
+    })
   }
 }

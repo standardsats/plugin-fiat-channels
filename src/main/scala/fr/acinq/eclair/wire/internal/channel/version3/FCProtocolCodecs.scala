@@ -102,6 +102,11 @@ object FCProtocolCodecs {
 
   val replyCurrentRateCodec = (millisatoshi withContext "rate").as[ReplyCurrentRate]
 
+  val tlvRateCodec = {
+    (tickerCodec withContext "ticker") ::
+      (millisatoshi withContext "rate")
+  }.as[TlvRate]
+
   // HC messages which don't have channel id
 
   def decodeHostedMessage(wrap: UnknownMessage): Attempt[HostedChannelMessage] = {
