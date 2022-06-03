@@ -25,7 +25,7 @@ object Blocking {
   def txWrite[T](act: DBIOAction[T, NoStream, Effect.Write], db: Database): T = Await.result(db.run(act.transactionally), span)
 
   def createTablesIfNotExist(db: Database): Unit = {
-    val tables = Seq(Channels.model, Updates.model, Preimages.model).map(_.schema.createIfNotExists)
+    val tables = Seq(Channels.model, Updates.model, Preimages.model, Rates.model).map(_.schema.createIfNotExists)
     val action = db.run(DBIO.sequence(tables).transactionally)
     Await.result(action, span)
   }
@@ -156,4 +156,32 @@ class Preimages(tag: Tag) extends Table[Preimages.DbType](tag, Preimages.tableNa
   def hash: Rep[ByteArray] = column[ByteArray]("hash", O.Unique)
   def preimage: Rep[ByteArray] = column[ByteArray]("preimage")
   def * = (id, hash, preimage)
+}
+
+object Rates {
+  final val tableName = "rates"
+  val model = TableQuery[Rates]
+
+  type DbType = (String, Long, Long, Long)
+
+  val insertCompiled = Compiled {
+    for (x <- model) yield (x.ticker, x.lastRate, x.maxRate, x.lastUpdate)
+  }
+
+  val findByTicker = Compiled {
+    (ticker: Rep[String]) => model.filter(_.ticker === ticker)
+  }
+
+  val findByTickerUpdatableCompiled = Compiled {
+    (ticker: Rep[String]) => for (x <- model if x.ticker === ticker) yield (x.ticker, x.lastRate, x.maxRate, x.lastUpdate)
+  }
+
+}
+
+class Rates(tag: Tag) extends Table[Rates.DbType](tag, Rates.tableName) {
+  def ticker: Rep[String] = column[String]("ticker", O.PrimaryKey)
+  def lastRate: Rep[Long] = column[Long]("lastRate")
+  def maxRate: Rep[Long] = column[Long]("maxRate")
+  def lastUpdate: Rep[Long] = column[Long]("lastUpdate")
+  def * = (ticker, lastRate, maxRate, lastUpdate)
 }

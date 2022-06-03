@@ -6,6 +6,7 @@ import akka.pattern.pipe
 import fr.acinq.eclair
 import fr.acinq.eclair._
 import fr.acinq.fc.app.Ticker
+import fr.acinq.fc.app.db.RatesDb
 import grizzled.slf4j.Logging
 
 import java.time.{Duration => JDuration}
@@ -27,7 +28,7 @@ object RateOracle {
    * TODO: that window should be smaller when we implement rate negotiation
    * procedure in the FC protocol.
     */
-  val WINDOW_SIZE = 48.hours
+  val WINDOW_SIZE = 8.hours
 
   val rateLock = new ReentrantReadWriteLock()
   val rateWrite = rateLock.writeLock()
@@ -48,8 +49,24 @@ object RateOracle {
   }
 }
 
-class RateOracle(kit: eclair.Kit, sources: Map[Ticker, RateSource]) extends Actor with Logging { me =>
+class RateOracle(kit: eclair.Kit, db: RatesDb, sources: Map[Ticker, RateSource]) extends Actor with Logging { me =>
   context.system.scheduler.scheduleWithFixedDelay(15.seconds, 15.seconds, self, RateOracle.TickUpdateRate)
+  fillFromDb()
+
+  def fillFromDb(): Unit = {
+    for (ticker <- Ticker.knownTickers) {
+      db.getRate(ticker) match {
+        case Some(srate) =>
+          try {
+            RateOracle.rateWrite.lock()
+            RateOracle.rates += ticker -> srate
+            logger.info(s"Restore ticker $ticker rate as lastRate=${srate.lastRate}, maxRate=${srate.maxRate}, lastUpdate=${srate.lastUpdate}");
+          } finally RateOracle.rateWrite.unlock()
+        case _ => ()
+      }
+    }
+
+  }
 
   override def receive: Receive = {
     case RateOracle.TickUpdateRate =>
@@ -65,18 +82,26 @@ class RateOracle(kit: eclair.Kit, sources: Map[Ticker, RateSource]) extends Acto
 
         current match {
           case None =>
-            RateOracle.rates += ticker -> StoredRate(newRate, newRate, LocalDateTime.now)
+            val srate = StoredRate(newRate, newRate, LocalDateTime.now)
+            RateOracle.rates += ticker -> srate
+            db.writeRate(ticker, srate)
           case Some(rate) =>
             val now = LocalDateTime.now
             val updateDealine = rate.lastUpdate.plus(JDuration.ofMillis(RateOracle.WINDOW_SIZE.toMillis))
             if (updateDealine.isAfter(now)) {
               if (rate.maxRate < newRate) {
-                RateOracle.rates += ticker -> StoredRate(newRate, newRate, LocalDateTime.now)
+                val srate = StoredRate(newRate, newRate, LocalDateTime.now)
+                RateOracle.rates += ticker -> srate
+                db.writeRate(ticker, srate)
               } else {
-                RateOracle.rates += ticker -> StoredRate(newRate, rate.maxRate, LocalDateTime.now)
+                val srate = StoredRate(newRate, rate.maxRate, LocalDateTime.now)
+                RateOracle.rates += ticker -> srate
+                db.writeRate(ticker, srate)
               }
             } else {
-              RateOracle.rates += ticker -> StoredRate(newRate, rate.maxRate, LocalDateTime.now)
+              val srate = StoredRate(newRate, rate.maxRate, LocalDateTime.now)
+              RateOracle.rates += ticker -> srate
+              db.writeRate(ticker, srate)
             }
         }
 

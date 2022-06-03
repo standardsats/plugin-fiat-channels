@@ -312,8 +312,8 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
           val commitments = data.marginProposal.map(data.withMargin).getOrElse(data.resizeProposal.map(data.withResize).getOrElse(data)).commitments
           val nextLocalLCSS = commitments.nextLocalUnsignedLCSSWithRate(log, currentBlockDay, newRate)
           if (commitments.validateFiatSpend(log, newRate)) {
-            log.info(s"Next lastOracleState: ${Some(nextLocalLCSS.rate)}")
-            stay StoringAndUsing data.copy(lastOracleState = Some(nextLocalLCSS.rate)) SendingHosted nextLocalLCSS.withLocalSigOfRemote(kit.nodeParams.privateKey).stateUpdate
+            log.info(s"Setting next lastAvgRate: ${Some(nextLocalLCSS.rate)} and sending StateUpdate message")
+            stay StoringAndUsing data.copy(lastAvgRate = Some(nextLocalLCSS.rate)) SendingHosted nextLocalLCSS.withLocalSigOfRemote(kit.nodeParams.privateKey).stateUpdate
           } else {
             log.error("Tried to spend more fiat that was in the channel")
             val (finalData, error) = withLocalError(data, ErrorCodes.ERR_NOT_ENOUGH_FIAT)
@@ -328,8 +328,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
 
 
     case Event(remoteSU: StateUpdate, data: HC_DATA_ESTABLISHED) if remoteSU.localSigOfRemoteLCSS != data.commitments.lastCrossSignedState.remoteSigOfLocal =>
-      val currentRate = data.lastOracleState.getOrElse(data.commitments.lastCrossSignedState.rate)
-      attemptStateUpdate(remoteSU, currentRate, data)
+      attemptStateUpdate(remoteSU, data)
 
     case Event(_: QueryCurrentRate, data: HC_DATA_ESTABLISHED) =>
       RateOracle.getCurrentRate(ticker) match {
@@ -638,7 +637,8 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
   def restoreEmptyData(localLCSS: LastCrossSignedState): HC_DATA_ESTABLISHED =
     HC_DATA_ESTABLISHED(HostedCommitments(localNodeId = kit.nodeParams.nodeId, remoteNodeId, channelId,
       CommitmentSpec(htlcs = Set.empty, FeeratePerKw(0L.sat), localLCSS.localBalanceMsat, localLCSS.remoteBalanceMsat), originChannels = Map.empty,
-      localLCSS, nextLocalUpdates = Nil, nextRemoteUpdates = Nil, announceChannel = false), makeChannelUpdate(localLCSS, enable = true), localErrors = Nil)
+      localLCSS, nextLocalUpdates = Nil, nextRemoteUpdates = Nil, announceChannel = false), makeChannelUpdate(localLCSS, enable = true), localErrors = Nil,
+      lastAvgRate = None)
 
   def withLocalError(data: HC_DATA_ESTABLISHED, errorCode: String): (HC_DATA_ESTABLISHED, Error) = {
     val localErrorExt: ErrorExt = ErrorExt generateFrom Error(channelId = channelId, msg = errorCode)
@@ -810,11 +810,15 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
     }
   }
 
-  def attemptStateUpdate(remoteSU: StateUpdate, newRate: MilliSatoshi, data: HC_DATA_ESTABLISHED): HostedFsmState = {
+  def attemptStateUpdate(remoteSU: StateUpdate, data: HC_DATA_ESTABLISHED): HostedFsmState = {
     log.info(s"PLGN FC, attemptStateUpdate with ${remoteSU}")
     log.info(s"Channel old rate is ${data.commitments.lastCrossSignedState.rate}")
-    log.info(s"My new rate is ${newRate}")
-    val lcss1 = data.commitments.nextLocalUnsignedLCSS(remoteSU.blockDay).copy(rate = newRate, remoteSigOfLocal = remoteSU.localSigOfRemoteLCSS).withLocalSigOfRemote(kit.nodeParams.privateKey)
+    log.info(s"My last known avg rate after local sign: ${data.lastAvgRate}")
+    log.info(s"Their new rate is ${remoteSU.rate}")
+    val knownRate = data.lastAvgRate.getOrElse(data.commitments.lastCrossSignedState.rate)
+    log.info(s"Last known avg rate of the channel: ${knownRate}")
+
+    val lcss1 = data.commitments.nextLocalUnsignedLCSS(remoteSU.blockDay).copy(rate = remoteSU.rate, remoteSigOfLocal = remoteSU.localSigOfRemoteLCSS).withLocalSigOfRemote(kit.nodeParams.privateKey)
     log.info(s"New channel rate is ${lcss1.rate}")
     val commits1 = data.commitments.copy(lastCrossSignedState = lcss1, localSpec = data.commitments.nextLocalSpec, nextLocalUpdates = Nil, nextRemoteUpdates = Nil)
     log.info(s"Verify remote signature of local state: $lcss1")
@@ -831,29 +835,20 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
       data.marginProposal.map(data.withMargin) match {
         case Some(data1) =>
           log.info(s"Remote sign is not ok, trying with known margin resize")
-          RateOracle.getMaxRate(ticker) match {
-            case Some(maxRate) =>
-              if (maxRate < remoteSU.rate) {
-                log.info(s"Margin rate is higher than expected. Our max rate: ${maxRate}, client wants: ${remoteSU.rate}")
-                val (data1, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_INVALID_ORACLE_PRICE)
-                goto(CLOSED) StoringAndUsing data1 SendingHasChannelId error
-              } else {
-                attemptStateUpdate(remoteSU, remoteSU.rate, data1)
-              }
-            case None =>
-              log.info(s"Doesn't know recent max rate, so not signing")
-              val (data1, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_INVALID_ORACLE_PRICE)
-              goto(CLOSED) StoringAndUsing data1 SendingHasChannelId error
-          }
+          attemptStateUpdate(remoteSU, data1)
         case None => data.resizeProposal.map(data.withResize) match {
           case Some(data1) =>
             log.info(s"Remote sign is not ok, trying with known resize")
-            attemptStateUpdate(remoteSU, newRate, data1)
+            attemptStateUpdate(remoteSU, data1)
           case None =>
             val (data1, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_WRONG_REMOTE_SIG)
             goto(CLOSED) StoringAndUsing data1 SendingHasChannelId error
         }
       }
+    } else if (remoteSU.rate != knownRate) {
+      log.info(s"Margin rate is higher than expected. Our last avg rate: ${knownRate}, client wants: ${remoteSU.rate}")
+      val (data1, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_INVALID_ORACLE_PRICE)
+      goto(CLOSED) StoringAndUsing data1 SendingHasChannelId error
     } else {
       val commitments1 = clearOrigin(commits1, data.commitments)
       context.system.eventStream publish AvailableBalanceChanged(self, channelId, shortChannelId, commitments = commitments1)
@@ -863,10 +858,14 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
       if(delta != 0.msat) {
         RateOracle.getCurrentRate(ticker) match {
           case Some(oracleRate) => {
-              val eurPrice = CentralBankOracle.getCurrentRate()
-              // Warning: crossRate is relevant for EUR channels only
-              val crossRate = (math round (oracleRate.toLong / eurPrice)).msat
-              context.system.eventStream publish FCHedgeLiability(shortChannelId.toString(), delta, crossRate)
+            val crossRate = ticker match {
+              case USD() => oracleRate
+              case EUR() => {
+                val eurPrice = CentralBankOracle.getCurrentRate()
+                (math round (oracleRate.toLong / eurPrice)).msat
+              }
+            }
+            context.system.eventStream publish FCHedgeLiability(shortChannelId.toString(), delta, crossRate)
           }
           case None =>
             log.error("Oracle price is not defined, not sending it to the client yet")
@@ -875,6 +874,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
       }
       stay StoringAndUsing data.copy(commitments = commitments1) RelayingRemoteUpdates data.commitments SendingHosted commits1.lastCrossSignedState.stateUpdate
     }
+
   }
 
   private def replyToCommand(reply: CommandResponse[Command], cmd: Command): Unit = cmd match {

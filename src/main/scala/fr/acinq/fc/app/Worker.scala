@@ -15,7 +15,6 @@ import fr.acinq.fc.app.db.Blocking.timeout
 import fr.acinq.fc.app.db.HostedChannelsDb
 import fr.acinq.fc.app.network.HostedSync
 import fr.acinq.fc.app.Worker._
-import fr.acinq.fc.app.rate.RateOracle
 import grizzled.slf4j.Logging
 import scodec.Attempt
 

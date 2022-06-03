@@ -22,7 +22,7 @@ import fr.acinq.eclair.transactions.DirectedHtlc
 import fr.acinq.eclair.wire.internal.channel.version3.FiatChannelCodecs
 import fr.acinq.eclair.wire.protocol.{FailureMessage, UpdateAddHtlc}
 import fr.acinq.fc.app.channel._
-import fr.acinq.fc.app.db.{Blocking, HostedChannelsDb, HostedUpdatesDb, PreimagesDb}
+import fr.acinq.fc.app.db.{Blocking, HostedChannelsDb, HostedUpdatesDb, PreimagesDb, RatesDb}
 import fr.acinq.fc.app.FC._
 import fr.acinq.fc.app.Ticker.{EUR_TICKER, USD_TICKER}
 import fr.acinq.fc.app.network.{HostedSync, OperationalData, PHC, PreimageBroadcastCatcher}
@@ -104,6 +104,7 @@ object FC {
 
 class FC extends Plugin with RouteProvider {
   var channelsDb: HostedChannelsDb = _
+  var ratesDb: RatesDb = _
   var preimageRef: ActorRef = _
   var workerRef: ActorRef = _
   var syncRef: ActorRef = _
@@ -116,6 +117,7 @@ class FC extends Plugin with RouteProvider {
     config = new Config(datadir = setup.datadir)
     Try(Blocking createTablesIfNotExist config.db)
     channelsDb = new HostedChannelsDb(config.db)
+    ratesDb = new RatesDb(config.db)
   }
 
   override def onKit(eclairKit: Kit): Unit = {
@@ -125,7 +127,7 @@ class FC extends Plugin with RouteProvider {
     var sources: Map[Ticker, RateSource] = Map.empty
     sources += USD_TICKER -> (new BinanceSourceModified(x => x, USD_TICKER, "BTCUSDT", implicitly))
     sources += EUR_TICKER -> (new BinanceSourceModified(x => x, EUR_TICKER, "BTCEUR", implicitly))
-    rateOracleRef = eclairKit.system actorOf Props(classOf[RateOracle], eclairKit, sources)
+    rateOracleRef = eclairKit.system actorOf Props(classOf[RateOracle], eclairKit, ratesDb, sources)
     ecbOracleRef = eclairKit.system actorOf Props(classOf[CentralBankOracle], eclairKit, new EcbSource(USD_TICKER, implicitly))
     workerRef = eclairKit.system actorOf Props(classOf[Worker], eclairKit, syncRef, preimageRef, channelsDb, config)
     kit = eclairKit
