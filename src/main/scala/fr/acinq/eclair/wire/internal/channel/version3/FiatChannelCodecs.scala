@@ -2,11 +2,11 @@ package fr.acinq.eclair.wire.internal.channel.version3
 
 import fr.acinq.eclair.wire.internal.channel.version3.ChannelCodecs3.Codecs.{commitmentSpecCodec, originsMapCodec}
 import fr.acinq.eclair.wire.internal.channel.version3.FCProtocolCodecs._
-import fr.acinq.eclair.wire.protocol.CommonCodecs.{bool8, bytes32, lengthDelimited, millisatoshi, publicKey}
+import fr.acinq.eclair.wire.protocol.CommonCodecs.{bool8, bytes32, lengthDelimited, millisatoshi, publicKey, uint64}
 import fr.acinq.eclair.wire.protocol.LightningMessageCodecs._
 import fr.acinq.eclair.wire.protocol.{HasChannelId, UpdateMessage}
 import fr.acinq.fc.app.channel.{ErrorExt, HC_DATA_ESTABLISHED, HostedCommitments, HostedState}
-import scodec.codecs.{listOfN, optional, uint16, utf8, variableSizeBytes}
+import scodec.codecs.{int64, listOfN, optional, uint16, utf8, variableSizeBytes}
 import scodec.{Attempt, Codec}
 
 
@@ -42,7 +42,8 @@ object FiatChannelCodecs {
       (optional(bool8, lengthDelimited(stateOverrideCodec)) withContext "overrideProposal") ::
       (optional(bool8, lengthDelimited(marginChannelCodec)) withContext "marginProposal") ::
       (optional(bool8, lengthDelimited(channelAnnouncementCodec)) withContext "channelAnnouncement") ::
-      (optional(bool8, millisatoshi) withContext "lastOracleState")
+      (optional(bool8, millisatoshi) withContext "lastOracleState") ::
+      (listOfN(uint16, int64) withContext "notFixedHtlcIds")
   }.as[HC_DATA_ESTABLISHED]
 
   val hostedStateCodec = {

@@ -80,7 +80,9 @@ case class HC_DATA_ESTABLISHED(commitments: HostedCommitments,
                                localErrors: List[ErrorExt] = Nil, remoteError: Option[ErrorExt] = None,
                                resizeProposal: Option[ResizeChannel] = None, overrideProposal: Option[StateOverride] = None,
                                marginProposal: Option[MarginChannel] = None,
-                               channelAnnouncement: Option[ChannelAnnouncement] = None, lastOracleState: Option[MilliSatoshi] = None
+                               channelAnnouncement: Option[ChannelAnnouncement] = None,
+                               lastOracleState: Option[MilliSatoshi] = None,
+                               notFixedHtlcIds: List[Long] = Nil,
                               ) extends HostedData { me =>
 
   lazy val errorExt: Option[ErrorExt] = localErrors.headOption orElse remoteError
@@ -102,6 +104,7 @@ case class HC_DATA_ESTABLISHED(commitments: HostedCommitments,
   def isResizeSupported: Boolean = commitments.lastCrossSignedState.initHostedChannel.features.contains(ResizeableFCFeature.mandatory)
 
   def timedOutOutgoingHtlcs(blockHeight: Long): Set[UpdateAddHtlc] = pendingHtlcs.collect(DirectedHtlc.outgoing).filter(blockHeight > _.cltvExpiry.toLong)
+  def missingRateIncomingHtlcs(): Set[UpdateAddHtlc] = commitments.nextLocalSpec.htlcs.collect(DirectedHtlc.incoming).filter(h => notFixedHtlcIds.contains(h.id))
 
   def almostTimedOutIncomingHtlcs(blockHeight: Long, fulfillSafety: Long): Set[UpdateAddHtlc] = pendingHtlcs.collect(DirectedHtlc.incoming).filter(blockHeight > _.cltvExpiry.toLong - fulfillSafety)
 
@@ -125,6 +128,9 @@ case class HC_DATA_ESTABLISHED(commitments: HostedCommitments,
       .modify(_.commitments.lastCrossSignedState.rate).setTo(margin.newRate)
       .modify(_.marginProposal).setTo(None)
       .modify(_.lastOracleState).setTo(None)
+
+  def withMissingRateHtlc(id: Long): HC_DATA_ESTABLISHED = me.modify(_.notFixedHtlcIds)(_.appended(id))
+  def withoutMissingRateHtlc(id: Long): HC_DATA_ESTABLISHED = me.modify(_.notFixedHtlcIds)(_.filter(_ != id))
 }
 
 object HostedCommitments {
