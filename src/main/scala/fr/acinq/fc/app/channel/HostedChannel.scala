@@ -12,7 +12,6 @@ import fr.acinq.eclair.channel.Origin.LocalCold
 import fr.acinq.eclair.channel._
 import fr.acinq.eclair.db.PendingCommandsDb
 import fr.acinq.eclair.io.Peer
-import fr.acinq.eclair.payment.OutgoingPaymentPacket
 import fr.acinq.eclair.payment.relay.Relayer
 import fr.acinq.eclair.router.Announcements
 import fr.acinq.eclair.transactions.{CommitmentSpec, DirectedHtlc, IncomingHtlc, OutgoingHtlc}
@@ -310,15 +309,19 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
             processRemoteResolve(data.commitments.receiveAdd(add), data)
           }
           case Left(_) => {
-            log.info(s"PLGN PHC, invalid HTLC price peer=$remoteNodeId")
-            log.info(s"Missing htlc ids: ${data.withMissingRateHtlc(add.id).notFixedHtlcIds}")
-            processRemoteResolve(data.commitments.receiveAdd(add), data.withMissingRateHtlc(add.id))
+            val disconnect = Peer.Disconnect(remoteNodeId)
+            val peer = FC.remoteNode2Connection.get(remoteNodeId)
+            log.info(s"PLGN PHC, invalid HTLC price, force-disconnecting peer=$remoteNodeId")
+            peer.foreach(_.info.peer ! disconnect)
+            goto(OFFLINE) StoringAndUsing data
           }
         }
         case _ => {
-          log.info(s"PLGN PHC, missing oracle price peer=$remoteNodeId")
-          log.info(s"Missing htlc ids: ${data.withMissingRateHtlc(add.id).notFixedHtlcIds}")
-          processRemoteResolve(data.commitments.receiveAdd(add), data.withMissingRateHtlc(add.id))
+          val disconnect = Peer.Disconnect(remoteNodeId)
+          val peer = FC.remoteNode2Connection.get(remoteNodeId)
+          log.info(s"PLGN PHC, missing oracle price, force-disconnecting peer=$remoteNodeId")
+          peer.foreach(_.info.peer ! disconnect)
+          goto(OFFLINE) StoringAndUsing data
         }
       }
 
@@ -393,9 +396,6 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
         else if (!isRemoteSigOk) stay replying CMDResFailure("Remote override signature is wrong")
         else {
           failTimedoutOutgoing(data.timedOutOutgoingHtlcs(Long.MaxValue), data)
-          val missingHtlcs = data.missingRateIncomingHtlcs()
-          log.info(s"Missing rate HTLC: $missingHtlcs")
-          failNotFixedHtlcIncoming(missingHtlcs, data)
           goto(NORMAL) StoringAndUsing restoreEmptyData(completeLocalLCSS) replying CMDResSuccess(cmd) SendingHosted completeLocalLCSS.stateUpdate
         }
       }
@@ -413,9 +413,6 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
       else if (!isRemoteSigOk) stay SendingHasChannelId Error(channelId, "Override signature is wrong")
       else {
         failTimedoutOutgoing(data.timedOutOutgoingHtlcs(Long.MaxValue), data)
-        val missingHtlcs = data.missingRateIncomingHtlcs()
-        log.info(s"Missing rate HTLC: $missingHtlcs")
-        failNotFixedHtlcIncoming(missingHtlcs, data)
         goto(NORMAL) StoringAndUsing restoreEmptyData(completeLocallySignedLCSS)
       }
   }
@@ -707,12 +704,6 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
     kit.relayer ! RES_ADD_SETTLED(data.commitments.originChannels(add.id), add, reasonChain)
   }
 
-  def failNotFixedHtlcIncoming(localAdds: Set[UpdateAddHtlc], data: HC_DATA_ESTABLISHED): Unit = localAdds foreach { add =>
-    log.info(s"PLGN FC, failing incoming htlc without fixed rate, hash=${add.paymentHash}, peer=$remoteNodeId")
-    val reasonChain = HtlcResult OnChainFail HtlcOverriddenByLocalCommit(channelId, htlc = add)
-    kit.relayer ! RES_ADD_SETTLED(Origin.ChannelRelayedCold(add.channelId, add.id, add.amountMsat, add.amountMsat), add, reasonChain)
-  }
-
   def clearOrigin(fresh: HostedCommitments, old: HostedCommitments): HostedCommitments = {
     val oldStateOutgoingHtlcIds = old.localSpec.htlcs.collect(DirectedHtlc.outgoing).map(_.id)
     val freshStateOutgoingHtlcIds = fresh.localSpec.htlcs.collect(DirectedHtlc.outgoing).map(_.id)
@@ -911,13 +902,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
             stay
         }
       }
-      val data1 = data.copy(commitments = commitments1)
-      val missingHtlcs = data1.missingRateIncomingHtlcs()
-      log.info(s"Missing rate HTLC ids: ${data1.notFixedHtlcIds}")
-      log.info(s"Outgoing HTLC: ${data1.commitments.nextLocalSpec.htlcs.collect(DirectedHtlc.incoming)}")
-      log.info(s"Missing rate HTLC: $missingHtlcs")
-      failNotFixedHtlcIncoming(missingHtlcs, data1)
-      stay StoringAndUsing data1.copy(notFixedHtlcIds = Nil) RelayingRemoteUpdates data.commitments SendingHosted commits1.lastCrossSignedState.stateUpdate
+      stay StoringAndUsing data.copy(commitments = commitments1) RelayingRemoteUpdates data.commitments SendingHosted commits1.lastCrossSignedState.stateUpdate
     }
   }
 
@@ -958,20 +943,4 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
       }
     })
   }
-
-//  private def failOutgoingHtlc(add: UpdateAddHtlc, data: HC_DATA_ESTABLISHED) = {
-//    val failOrErr = OutgoingPaymentPacket.buildHtlcFailure(kit.nodeParams.privateKey, Right(PermanentChannelFailure), add) map {
-//      encryptedReason => UpdateFailHtlc(add.channelId, add.id, encryptedReason)
-//    }
-//    failOrErr match {
-//      case Right(fail) => {
-//        processRemoteResolve(data.commitments.receiveAdd(add).flatMap(_.receiveFail(fail)), data)
-//      }//stay SendingHasChannelId fail
-//      case Left(err) => {
-//        log.error(s"Cannot fail HTLC due: $err")
-//        val (finalData, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_CLOSED_BY_REMOTE_PEER)
-//        goto(CLOSED) StoringAndUsing finalData SendingHasChannelId error
-//      }
-//    }
-//  }
 }
