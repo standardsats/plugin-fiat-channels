@@ -123,5 +123,3 @@ case class ReplyPreimages(preimages: List[ByteVector32] = Nil) extends HostedCha
 case class QueryCurrentRate() extends HostedChannelMessage
 
 case class ReplyCurrentRate(rate: MilliSatoshi) extends HostedChannelMessage
-
-case class TlvRate(ticker: Ticker, rate: MilliSatoshi)
