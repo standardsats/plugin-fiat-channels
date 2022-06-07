@@ -305,7 +305,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
     case Event(fail: UpdateFailMalformedHtlc, data: HC_DATA_ESTABLISHED) => processRemoteResolve(data.commitments.receiveFailMalformed(fail), data)
 
     case Event(_: CMD_SIGN, data: HC_DATA_ESTABLISHED) if data.commitments.nextLocalUpdates.nonEmpty || data.resizeProposal.isDefined || data.marginProposal.isDefined =>
-      RateOracle.getCurrentRate(ticker) match {
+      currentRate(data, ticker) match {
         case Some(oracleRate) =>
           log.info(s"Current oracle rate is ${oracleRate}")
           val newRate = if (oracleRate == 0.msat) data.commitments.lastCrossSignedState.rate else oracleRate
@@ -331,7 +331,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
       attemptStateUpdate(remoteSU, data)
 
     case Event(_: QueryCurrentRate, data: HC_DATA_ESTABLISHED) =>
-      RateOracle.getCurrentRate(ticker) match {
+      currentRate(data, ticker) match {
         case Some(oracleRate) => stay SendingHosted ReplyCurrentRate(oracleRate)
         case None =>
           log.error("Oracle price is not defined, not sending it to the client yet")
@@ -856,7 +856,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
       val delta = commits1.lastCrossSignedState.remoteBalanceMsat - data.commitments.lastCrossSignedState.remoteBalanceMsat
       // delta == 0 means rate adjustment
       if(delta != 0.msat) {
-        RateOracle.getCurrentRate(ticker) match {
+        currentRate(data, ticker) match {
           case Some(oracleRate) => {
             val crossRate = ticker match {
               case USD() => oracleRate
@@ -872,7 +872,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
             stay
         }
       }
-      stay StoringAndUsing data.copy(commitments = commitments1) RelayingRemoteUpdates data.commitments SendingHosted commits1.lastCrossSignedState.stateUpdate
+      stay StoringAndUsing data.copy(commitments = commitments1, lastAvgRate = None) RelayingRemoteUpdates data.commitments SendingHosted commits1.lastCrossSignedState.stateUpdate
     }
 
   }
@@ -881,4 +881,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
     case cmd1: HasReplyToCommand => if (cmd1.replyTo == ActorRef.noSender) sender ! reply else cmd1.replyTo ! reply
     case cmd1: HasOptionalReplyToCommand => cmd1.replyTo_opt.foreach(_ ! reply)
   }
+
+  private def currentRate(data: HC_DATA_ESTABLISHED, ticker: Ticker): Option[MilliSatoshi] =
+    data.lastAvgRate.orElse(RateOracle.getCurrentRate(ticker))
 }
