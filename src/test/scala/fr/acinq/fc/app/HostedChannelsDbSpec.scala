@@ -2,6 +2,7 @@ package fr.acinq.fc.app
 
 import fr.acinq.eclair._
 import com.softwaremill.quicklens._
+
 import scala.collection.parallel.CollectionConverters._
 import fr.acinq.fc.app.Tools.{DuplicateHandler, DuplicateShortId}
 import fr.acinq.bitcoin.scalacompat.{ByteVector32, Satoshi}
@@ -13,6 +14,7 @@ import fr.acinq.eclair.transactions.CommitmentSpec
 import fr.acinq.fc.app.db.HostedChannelsDb
 import org.scalatest.funsuite.AnyFunSuite
 import fr.acinq.eclair.ShortChannelId
+import fr.acinq.fc.app.Ticker.USD_TICKER
 
 
 class HostedChannelsDbSpec extends AnyFunSuite {
@@ -23,12 +25,12 @@ class HostedChannelsDbSpec extends AnyFunSuite {
 
     cdb.updateOrAddNewChannel(data) // Insert
     cdb.updateOrAddNewChannel(data) // Update
-    assert(!cdb.getChannelByRemoteNodeId(hdc.remoteNodeId).head.commitments.announceChannel)
+    assert(!cdb.getChannelByRemoteNodeId(hdc.remoteNodeId, USD_TICKER).head.commitments.announceChannel)
 
     val data1 = data.copy(commitments = hdc.copy(announceChannel = true)) // Channel becomes public
 
     cdb.updateOrAddNewChannel(data1) // Update
-    assert(cdb.getChannelByRemoteNodeId(hdc.remoteNodeId).head.commitments.announceChannel) // channelId is the same, but announce updated
+    assert(cdb.getChannelByRemoteNodeId(hdc.remoteNodeId, USD_TICKER).head.commitments.announceChannel) // channelId is the same, but announce updated
 
     val data2 = data1.copy(commitments = hdc.copy(remoteNodeId = randomKey.publicKey,
       channelId = randomBytes32)) // Different remote NodeId, but shortId is the same (which is theoretically possible)
@@ -37,7 +39,7 @@ class HostedChannelsDbSpec extends AnyFunSuite {
       def insert(data: HC_DATA_ESTABLISHED): Boolean = cdb.addNewChannel(data)
     }
 
-    assert(cdb.getChannelByRemoteNodeId(data2.commitments.remoteNodeId).isEmpty) // Such a channel could not be found
+    assert(cdb.getChannelByRemoteNodeId(data2.commitments.remoteNodeId, USD_TICKER).isEmpty) // Such a channel could not be found
     assert(Failure(DuplicateShortId) == insertOrFail.execute(data2)) // New channel could not be created because of existing shortId
   }
 
@@ -52,7 +54,7 @@ class HostedChannelsDbSpec extends AnyFunSuite {
 
     cdb.updateOrAddNewChannel(data1)
     assert(cdb.getChannelBySecret(secret).isEmpty)
-    assert(cdb.updateSecretById(data1.commitments.remoteNodeId, secret))
+    assert(cdb.updateSecretById(data1.commitments.remoteNodeId, data1.commitments.lastCrossSignedState.initHostedChannel.ticker, secret))
     assert(cdb.getChannelBySecret(secret).get == data1)
   }
 
@@ -137,7 +139,7 @@ class HostedChannelsDbSpec extends AnyFunSuite {
   test("HC short channel ids are random") {
     val hostNodeId = randomBytes32
     val iterations = 1000000
-    val sids = List.fill(iterations)(Tools.hostedShortChanId(randomBytes32, hostNodeId))
+    val sids = List.fill(iterations)(Tools.hostedShortChanId(randomBytes32, hostNodeId, USD_TICKER))
     assert(sids.size == sids.toSet.size)
   }
 }

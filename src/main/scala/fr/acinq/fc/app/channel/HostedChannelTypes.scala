@@ -28,29 +28,30 @@ case class HostedState(nodeId1: PublicKey, nodeId2: PublicKey, lastCrossSignedSt
 
 sealed trait HasRemoteNodeIdHostedCommand {
   def remoteNodeId: PublicKey
+  def ticker: Ticker
 }
 
-case class HC_CMD_LOCAL_INVOKE(remoteNodeId: PublicKey, refundScriptPubKey: ByteVector, secret: ByteVector) extends HasRemoteNodeIdHostedCommand
+case class HC_CMD_LOCAL_INVOKE(remoteNodeId: PublicKey, ticker: Ticker, refundScriptPubKey: ByteVector, secret: ByteVector) extends HasRemoteNodeIdHostedCommand
 
-case class HC_CMD_EXTERNAL_FULFILL(remoteNodeId: PublicKey, htlcId: Long, paymentPreimage: ByteVector32) extends HasRemoteNodeIdHostedCommand
+case class HC_CMD_EXTERNAL_FULFILL(remoteNodeId: PublicKey, ticker: Ticker, htlcId: Long, paymentPreimage: ByteVector32) extends HasRemoteNodeIdHostedCommand
 
-case class HC_CMD_OVERRIDE_PROPOSE(remoteNodeId: PublicKey, newLocalBalance: MilliSatoshi) extends HasRemoteNodeIdHostedCommand
-case class HC_CMD_OVERRIDE_ACCEPT(remoteNodeId: PublicKey) extends HasRemoteNodeIdHostedCommand
+case class HC_CMD_OVERRIDE_PROPOSE(remoteNodeId: PublicKey, ticker: Ticker, newLocalBalance: MilliSatoshi) extends HasRemoteNodeIdHostedCommand
+case class HC_CMD_OVERRIDE_ACCEPT(remoteNodeId: PublicKey, ticker: Ticker) extends HasRemoteNodeIdHostedCommand
 
-case class HC_CMD_PUBLIC(remoteNodeId: PublicKey, force: Boolean = false) extends HasRemoteNodeIdHostedCommand
-case class HC_CMD_PRIVATE(remoteNodeId: PublicKey) extends HasRemoteNodeIdHostedCommand
+case class HC_CMD_PUBLIC(remoteNodeId: PublicKey, ticker: Ticker, force: Boolean = false) extends HasRemoteNodeIdHostedCommand
+case class HC_CMD_PRIVATE(remoteNodeId: PublicKey, ticker: Ticker) extends HasRemoteNodeIdHostedCommand
 
-case class HC_CMD_RESIZE(remoteNodeId: PublicKey, newCapacity: Satoshi) extends HasRemoteNodeIdHostedCommand
+case class HC_CMD_RESIZE(remoteNodeId: PublicKey, ticker: Ticker, newCapacity: Satoshi) extends HasRemoteNodeIdHostedCommand
 
 // Increase balance and capacity to match fiat balance
-case class HC_CMD_MARGIN(remoteNodeId: PublicKey, newCapacity: Satoshi, newRate: MilliSatoshi) extends HasRemoteNodeIdHostedCommand
+case class HC_CMD_MARGIN(remoteNodeId: PublicKey, ticker: Ticker, newCapacity: Satoshi, newRate: MilliSatoshi) extends HasRemoteNodeIdHostedCommand
 
-case class HC_CMD_RESTORE(remoteNodeId: PublicKey, remoteData: HostedState) extends HasRemoteNodeIdHostedCommand
+case class HC_CMD_RESTORE(remoteNodeId: PublicKey, ticker: Ticker, remoteData: HostedState) extends HasRemoteNodeIdHostedCommand
 
 case class HC_CMD_GET_ALL_CHANNELS()
-case class HC_CMD_GET_INFO(remoteNodeId: PublicKey) extends HasRemoteNodeIdHostedCommand
+case class HC_CMD_GET_INFO(remoteNodeId: PublicKey, ticker: Ticker) extends HasRemoteNodeIdHostedCommand
 
-case class HC_CMD_SUSPEND(remoteNodeId: PublicKey) extends HasRemoteNodeIdHostedCommand
+case class HC_CMD_SUSPEND(remoteNodeId: PublicKey, ticker: Ticker) extends HasRemoteNodeIdHostedCommand
 
 sealed trait HCCommandResponse
 
@@ -79,7 +80,8 @@ case class HC_DATA_ESTABLISHED(commitments: HostedCommitments,
                                localErrors: List[ErrorExt] = Nil, remoteError: Option[ErrorExt] = None,
                                resizeProposal: Option[ResizeChannel] = None, overrideProposal: Option[StateOverride] = None,
                                marginProposal: Option[MarginChannel] = None,
-                               channelAnnouncement: Option[ChannelAnnouncement] = None, lastOracleState: Option[MilliSatoshi] = None
+                               channelAnnouncement: Option[ChannelAnnouncement] = None,
+                               lastAvgRate: Option[MilliSatoshi],
                               ) extends HostedData { me =>
 
   lazy val errorExt: Option[ErrorExt] = localErrors.headOption orElse remoteError
@@ -112,7 +114,7 @@ case class HC_DATA_ESTABLISHED(commitments: HostedCommitments,
       .modify(_.commitments.localSpec.toRemote).usingIf(!commitments.lastCrossSignedState.isHost)(_ + resize.newCapacity - commitments.capacity)
       .modify(_.commitments.localSpec.toLocal).usingIf(commitments.lastCrossSignedState.isHost)(_ + resize.newCapacity - commitments.capacity)
       .modify(_.resizeProposal).setTo(None)
-      .modify(_.lastOracleState).setTo(None)
+      .modify(_.lastAvgRate).setTo(None)
 
   def withMargin(margin: MarginChannel): HC_DATA_ESTABLISHED =
     me.modify(_.commitments.lastCrossSignedState.initHostedChannel.maxHtlcValueInFlightMsat).setTo(margin.newCapacityMsatU64)
@@ -123,7 +125,7 @@ case class HC_DATA_ESTABLISHED(commitments: HostedCommitments,
       .modify(_.commitments.localSpec.toLocal).usingIf(commitments.lastCrossSignedState.isHost)(_ => margin.newCapacity - margin.newRemoteBalance(commitments.lastCrossSignedState))
       .modify(_.commitments.lastCrossSignedState.rate).setTo(margin.newRate)
       .modify(_.marginProposal).setTo(None)
-      .modify(_.lastOracleState).setTo(None)
+      .modify(_.lastAvgRate).setTo(None)
 }
 
 object HostedCommitments {

@@ -6,6 +6,7 @@ import fr.acinq.fc.app.{HCTestUtils, InvokeHostedChannel, LastCrossSignedState, 
 import org.scalatest.Outcome
 import fr.acinq.bitcoin.scalacompat.SatoshiLong
 import fr.acinq.eclair.wire.protocol.{ChannelUpdate, UpdateAddHtlc, UpdateFulfillHtlc}
+import fr.acinq.fc.app.Ticker.USD_TICKER
 import org.scalatest.funsuite.FixtureAnyFunSuiteLike
 
 class FCResizeSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike with FCStateTestsHelperMethods {
@@ -21,7 +22,7 @@ class FCResizeSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike with FCS
     reachNormal(f)
     awaitCond(alice.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.capacity == 10000000L.sat)
     awaitCond(bob.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.localSpec.toLocal == 0L.msat)
-    bob ! HC_CMD_RESIZE(bobKit.nodeParams.nodeId, 50000000L.sat)
+    bob ! HC_CMD_RESIZE(bobKit.nodeParams.nodeId, USD_TICKER, 50000000L.sat)
     alice ! bob2alice.expectMsgType[ResizeChannel]
     alice ! bob2alice.expectMsgType[StateUpdate]
     bob ! alice2bob.expectMsgType[StateUpdate]
@@ -51,7 +52,7 @@ class FCResizeSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike with FCS
     val (preimage2, bob2aliceUpdateAdd2) = addHtlcFromBob2Alice(2000000000L.msat, f)
     alice ! CMD_FULFILL_HTLC(bob2aliceUpdateAdd2.id, preimage2)
     alice ! CMD_SIGN(None)
-    bob ! HC_CMD_RESIZE(bobKit.nodeParams.nodeId, 20000000L.sat)
+    bob ! HC_CMD_RESIZE(bobKit.nodeParams.nodeId, USD_TICKER, 20000000L.sat)
     alice ! bob2alice.expectMsgType[ResizeChannel]
     alice ! bob2alice.expectMsgType[StateUpdate]
     bob ! alice2bob.expectMsgType[UpdateFulfillHtlc]
@@ -85,7 +86,7 @@ class FCResizeSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike with FCS
     HCTestUtils.resetEntireDatabase(bobDB)
     reachNormal(f)
     val (preimage0, alice2bobUpdateAdd0) = addHtlcFromAliceToBob(5000000000L.msat, f, currentBlockHeight)
-    bob ! HC_CMD_RESIZE(bobKit.nodeParams.nodeId, 20000000L.sat)
+    bob ! HC_CMD_RESIZE(bobKit.nodeParams.nodeId, USD_TICKER, 20000000L.sat)
     bob2alice.expectMsgType[ResizeChannel] // Alice does not get it
     bob2alice.expectMsgType[StateUpdate]
 
@@ -119,7 +120,7 @@ class FCResizeSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike with FCS
     HCTestUtils.resetEntireDatabase(bobDB)
     reachNormal(f)
     val (preimage0, alice2bobUpdateAdd0) = addHtlcFromAliceToBob(5000000000L.msat, f, currentBlockHeight)
-    bob ! HC_CMD_RESIZE(bobKit.nodeParams.nodeId, 20000000L.sat)
+    bob ! HC_CMD_RESIZE(bobKit.nodeParams.nodeId, USD_TICKER, 20000000L.sat)
     alice ! bob2alice.expectMsgType[ResizeChannel]
     alice ! bob2alice.expectMsgType[StateUpdate]
     alice2bob.expectMsgType[StateUpdate] // Bob does not get it
@@ -151,7 +152,7 @@ class FCResizeSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike with FCS
     HCTestUtils.resetEntireDatabase(aliceDB)
     HCTestUtils.resetEntireDatabase(bobDB)
     reachNormal(f)
-    bob ! HC_CMD_RESIZE(bobKit.nodeParams.nodeId, 20000000L.sat)
+    bob ! HC_CMD_RESIZE(bobKit.nodeParams.nodeId, USD_TICKER, 20000000L.sat)
     alice ! bob2alice.expectMsgType[ResizeChannel]
     bob2alice.expectMsgType[StateUpdate] // Alice does not get it
     bob2alice.expectNoMessage()
@@ -200,7 +201,7 @@ class FCResizeSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike with FCS
     HCTestUtils.resetEntireDatabase(bobDB)
     reachNormal(f)
     val (preimage0, alice2bobUpdateAdd0) = addHtlcFromAliceToBob(5000000000L.msat, f, currentBlockHeight)
-    bob ! HC_CMD_RESIZE(bobKit.nodeParams.nodeId, 20000000L.sat)
+    bob ! HC_CMD_RESIZE(bobKit.nodeParams.nodeId, USD_TICKER, 20000000L.sat)
     alice ! bob2alice.expectMsgType[ResizeChannel]
     bob2alice.expectMsgType[StateUpdate] // Alice does not get it
     bob2alice.expectNoMessage()

@@ -8,10 +8,11 @@ import fr.acinq.eclair.wire.internal.channel.version3.{FCProtocolCodecs, FiatCha
 import fr.acinq.fc.app.channel.{ErrorCodes, ErrorExt, HC_DATA_ESTABLISHED, HostedCommitments, HostedState}
 import fr.acinq.eclair.channel.{Channel, Origin}
 import scodec.bits.{BitVector, ByteVector}
-
 import fr.acinq.eclair.blockchain.fee.FeeratePerKw
 import fr.acinq.eclair.router.Announcements
+import fr.acinq.fc.app.Ticker.USD_TICKER
 import org.scalatest.funsuite.AnyFunSuite
+
 import scala.util.Random
 import java.util.UUID
 
@@ -37,9 +38,9 @@ object HostedWireSpec {
     paymentHash = ByteVector32.Zeroes,
     onionRoutingPacket = TestConstants.emptyOnionPacket)
 
-  val invoke_hosted_channel: InvokeHostedChannel = InvokeHostedChannel(Block.LivenetGenesisBlock.hash, ByteVector.fromValidHex("00" * 32), secret = ByteVector.fromValidHex("00" * 32))
+  val invoke_hosted_channel: InvokeHostedChannel = InvokeHostedChannel(Block.LivenetGenesisBlock.hash, ByteVector.fromValidHex("00" * 32), secret = ByteVector.fromValidHex("00" * 32), USD_TICKER)
 
-  val init_hosted_channel: InitHostedChannel = InitHostedChannel(UInt64(6), 10.msat, 20, 500000000L.msat, 1000000.msat, 1.msat, List(FCFeature.mandatory, ResizeableFCFeature.mandatory))
+  val init_hosted_channel: InitHostedChannel = InitHostedChannel(UInt64(6), 10.msat, 20, 500000000L.msat, 1000000.msat, 1.msat, USD_TICKER, List(FCFeature.mandatory, ResizeableFCFeature.mandatory))
 
   val state_update: StateUpdate = StateUpdate(blockDay = 20020L, localUpdates = 1202L, remoteUpdates = 10L, 1.msat, ByteVector64.Zeroes)
 
@@ -74,8 +75,9 @@ class HostedWireSpec extends AnyFunSuite {
   test("Correctly derive HC id and short id") {
     val pubkey1 = randomKey.publicKey.value
     val pubkey2 = randomKey.publicKey.value
-    assert(Tools.hostedChanId(pubkey1, pubkey2) == Tools.hostedChanId(pubkey2, pubkey1))
-    assert(Tools.hostedShortChanId(pubkey1, pubkey2) == Tools.hostedShortChanId(pubkey2, pubkey1))
+    val ticker = USD_TICKER
+    assert(Tools.hostedChanId(pubkey1, pubkey2, ticker) == Tools.hostedChanId(pubkey2, pubkey1, ticker))
+    assert(Tools.hostedShortChanId(pubkey1, pubkey2, ticker) == Tools.hostedShortChanId(pubkey2, pubkey1, ticker))
   }
 
   test("Encode and decode data") {

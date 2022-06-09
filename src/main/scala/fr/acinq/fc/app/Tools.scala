@@ -18,6 +18,7 @@ import slick.jdbc.PostgresProfile
 
 import java.io.{ByteArrayInputStream, File}
 import java.nio.ByteOrder
+import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 import scala.util.Try
 
@@ -51,13 +52,16 @@ object Tools {
     if (pubkey1First) pubkey1 ++ pubkey2 else pubkey2 ++ pubkey1
   }
 
-  def hostedChanId(pubkey1: ByteVector, pubkey2: ByteVector): ByteVector32 = {
+  def hostedChanId(pubkey1: ByteVector, pubkey2: ByteVector, ticker: Ticker): ByteVector32 = {
     val nodesCombined = hostedNodesCombined(pubkey1, pubkey2)
-    Crypto.sha256(nodesCombined)
+    val tickerBytes = ticker.tag.getBytes(StandardCharsets.UTF_8)
+    Crypto.sha256(nodesCombined ++ ByteVector(tickerBytes))
   }
 
-  def hostedShortChanId(pubkey1: ByteVector, pubkey2: ByteVector): ShortChannelId = {
-    val stream = new ByteArrayInputStream(hostedNodesCombined(pubkey1, pubkey2).toArray)
+  def hostedShortChanId(pubkey1: ByteVector, pubkey2: ByteVector, ticker: Ticker): ShortChannelId = {
+    val tickerBytes = ticker.tag.getBytes(StandardCharsets.UTF_8)
+    val hash = Crypto.sha256(hostedNodesCombined(pubkey1, pubkey2) ++ ByteVector(tickerBytes))
+    val stream = new ByteArrayInputStream(hash.toArray)
     def getChunk: Long = Protocol.uint64(stream, ByteOrder.BIG_ENDIAN)
     ShortChannelId(List.fill(8)(getChunk).sum)
   }
@@ -105,7 +109,7 @@ class Config(datadir: File) {
 case class FCParams(feeBaseMsat: Long, feeProportionalMillionths: Long, cltvDeltaBlocks: Int, channelCapacityMsat: Long, htlcMinimumMsat: Long, maxAcceptedHtlcs: Int, isResizable: Boolean) {
   def lastUpdateDiffers(u: ChannelUpdate): Boolean = u.cltvExpiryDelta.toInt != cltvDeltaBlocks || u.htlcMinimumMsat != htlcMinimum || u.feeBaseMsat != feeBase || u.feeProportionalMillionths != feeProportionalMillionths
 
-  def initMsg(rate: MilliSatoshi): InitHostedChannel = InitHostedChannel(UInt64(channelCapacityMsat), htlcMinimum, maxAcceptedHtlcs, channelCapacityMsat.msat, initialClientBalanceMsat = 0L.msat, initialRate = rate, channelFeatures)
+  def initMsg(rate: MilliSatoshi, ticker: Ticker): InitHostedChannel = InitHostedChannel(UInt64(channelCapacityMsat), htlcMinimum, maxAcceptedHtlcs, channelCapacityMsat.msat, initialClientBalanceMsat = 0L.msat, initialRate = rate, ticker = ticker, channelFeatures)
 
   lazy val channelFeatures: List[Int] = if (isResizable) List(FCFeature.mandatory, ResizeableFCFeature.mandatory) else List(FCFeature.mandatory)
 

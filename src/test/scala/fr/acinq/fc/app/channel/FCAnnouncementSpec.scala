@@ -3,6 +3,7 @@ package fr.acinq.fc.app.channel
 import fr.acinq.eclair.channel.LocalChannelUpdate
 import fr.acinq.eclair.TestKitBaseClass
 import fr.acinq.eclair.wire.protocol.UnknownMessage
+import fr.acinq.fc.app.Ticker.USD_TICKER
 import fr.acinq.fc.app._
 import org.scalatest.Outcome
 import org.scalatest.funsuite.FixtureAnyFunSuiteLike
@@ -48,11 +49,11 @@ class FCAnnouncementSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike wi
     HCTestUtils.resetEntireDatabase(bobDB)
     reachNormal(f)
     announcePHC(f)
-    alice ! HC_CMD_PRIVATE(bobKit.nodeParams.nodeId)
+    alice ! HC_CMD_PRIVATE(bobKit.nodeParams.nodeId, USD_TICKER)
     awaitCond(alice.stateData.asInstanceOf[HC_DATA_ESTABLISHED].channelAnnouncement.isEmpty)
     alice ! HostedChannel.SendAnnouncements(force = false)
     channelUpdateListener.expectNoMessage()
-    alice ! HC_CMD_PUBLIC(bobKit.nodeParams.nodeId, force = true)
+    alice ! HC_CMD_PUBLIC(bobKit.nodeParams.nodeId, USD_TICKER, force = true)
     channelUpdateListener.expectMsgType[LocalChannelUpdate] // Alice update event
     bob ! alice2bob.expectMsgType[AnnouncementSignature]
     channelUpdateListener.expectMsgType[LocalChannelUpdate] // Bob update event

@@ -25,7 +25,7 @@ object Blocking {
   def txWrite[T](act: DBIOAction[T, NoStream, Effect.Write], db: Database): T = Await.result(db.run(act.transactionally), span)
 
   def createTablesIfNotExist(db: Database): Unit = {
-    val tables = Seq(Channels.model, Updates.model, Preimages.model).map(_.schema.createIfNotExists)
+    val tables = Seq(Channels.model, Updates.model, Preimages.model, Rates.model).map(_.schema.createIfNotExists)
     val action = db.run(DBIO.sequence(tables).transactionally)
     Await.result(action, span)
   }
@@ -36,17 +36,21 @@ object Channels {
   final val tableName = "channels"
   val model = TableQuery[Channels]
 
-  type DbType = (Long, ByteArray, Long, Int, Boolean, Long, Long, ByteArray, ByteArray)
+  type DbType = (Long, ByteArray, ByteArray, Long, Int, Boolean, Long, String, Long, ByteArray, ByteArray)
 
   val insertCompiled = Compiled {
-    for (x <- model) yield (x.remoteNodeId, x.shortChannelId, x.inFlightHtlcs, x.isHost, x.lastBlockDay, x.createdAt, x.data, x.secret)
+    for (x <- model) yield (x.remoteNodeId, x.channelId, x.shortChannelId, x.inFlightHtlcs, x.isHost, x.lastBlockDay, x.ticker, x.createdAt, x.data, x.secret)
   }
 
   val findByRemoteNodeIdUpdatableCompiled = Compiled {
-    (nodeId: RepByteArray) => for (x <- model if x.remoteNodeId === nodeId) yield (x.inFlightHtlcs, x.isHost, x.lastBlockDay, x.data)
+    (nodeId: RepByteArray, ticker_tag: Rep[String]) => for (x <- model if x.remoteNodeId === nodeId && x.ticker === ticker_tag) yield (x.inFlightHtlcs, x.isHost, x.lastBlockDay, x.data)
   }
 
-  val findSecretUpdatableByRemoteNodeIdCompiled = Compiled { nodeId: RepByteArray => for (x <- model if x.remoteNodeId === nodeId) yield x.secret }
+  val findByChanIdUpdatableCompiled = Compiled {
+    (chanId: RepByteArray) => for (x <- model if x.channelId === chanId) yield (x.inFlightHtlcs, x.isHost, x.lastBlockDay, x.data)
+  }
+
+  val findSecretUpdatableByRemoteNodeIdCompiled = Compiled { (nodeId: RepByteArray, ticker: Rep[String]) => for (x <- model if x.remoteNodeId === nodeId && x.ticker === ticker) yield x.secret }
 
   val findBySecretCompiled = Compiled { secret: RepByteArray => for (x <- model if x.secret === secret) yield x.data }
 
@@ -60,13 +64,15 @@ object Channels {
 class Channels(tag: Tag) extends Table[Channels.DbType](tag, Channels.tableName) {
   def id: Rep[Long] = column[Long]("id", O.PrimaryKey, O.AutoInc)
   // These are not updatable
-  def remoteNodeId: Rep[ByteArray] = column[ByteArray]("remote_node_id", O.Unique)
+  def remoteNodeId: Rep[ByteArray] = column[ByteArray]("remote_node_id")
+  def channelId: Rep[ByteArray] = column[ByteArray]("channel_id", O.Unique)
   def shortChannelId: Rep[Long] = column[Long]("short_channel_id", O.Unique)
   def createdAt: Rep[Long] = column[Long]("created_at_msec")
   // These get derived from data when updating
   def inFlightHtlcs: Rep[Int] = column[Int]("in_flight_htlcs")
   def isHost: Rep[Boolean] = column[Boolean]("is_host")
   def lastBlockDay: Rep[Long] = column[Long]("last_block_day")
+  def ticker: Rep[String] = column[String]("ticker")
   // These have special update rules
   def data: Rep[ByteArray] = column[ByteArray]("data")
   def secret: Rep[ByteArray] = column[ByteArray]("secret")
@@ -75,7 +81,7 @@ class Channels(tag: Tag) extends Table[Channels.DbType](tag, Channels.tableName)
   def idx2: Index = index("channels__in_flight_htlcs__idx", inFlightHtlcs, unique = false) // Select these on startup for HTLC resolution
   def idx3: Index = index("channels__secret__idx", secret, unique = false) // Find these on user request
 
-  def * = (id, remoteNodeId, shortChannelId, inFlightHtlcs, isHost, lastBlockDay, createdAt, data, secret)
+  def * = (id, remoteNodeId, channelId, shortChannelId, inFlightHtlcs, isHost, lastBlockDay, ticker, createdAt, data, secret)
 }
 
 
@@ -150,4 +156,32 @@ class Preimages(tag: Tag) extends Table[Preimages.DbType](tag, Preimages.tableNa
   def hash: Rep[ByteArray] = column[ByteArray]("hash", O.Unique)
   def preimage: Rep[ByteArray] = column[ByteArray]("preimage")
   def * = (id, hash, preimage)
+}
+
+object Rates {
+  final val tableName = "rates"
+  val model = TableQuery[Rates]
+
+  type DbType = (String, Long, Long, Long)
+
+  val insertCompiled = Compiled {
+    for (x <- model) yield (x.ticker, x.lastRate, x.maxRate, x.lastUpdate)
+  }
+
+  val findByTicker = Compiled {
+    (ticker: Rep[String]) => model.filter(_.ticker === ticker)
+  }
+
+  val findByTickerUpdatableCompiled = Compiled {
+    (ticker: Rep[String]) => for (x <- model if x.ticker === ticker) yield (x.ticker, x.lastRate, x.maxRate, x.lastUpdate)
+  }
+
+}
+
+class Rates(tag: Tag) extends Table[Rates.DbType](tag, Rates.tableName) {
+  def ticker: Rep[String] = column[String]("ticker", O.PrimaryKey)
+  def lastRate: Rep[Long] = column[Long]("lastRate")
+  def maxRate: Rep[Long] = column[Long]("maxRate")
+  def lastUpdate: Rep[Long] = column[Long]("lastUpdate")
+  def * = (ticker, lastRate, maxRate, lastUpdate)
 }

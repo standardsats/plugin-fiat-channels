@@ -6,6 +6,7 @@ import fr.acinq.eclair._
 import fr.acinq.eclair.channel._
 import fr.acinq.eclair.payment.relay.Relayer
 import fr.acinq.eclair.wire.protocol.{ChannelUpdate, UpdateAddHtlc, UpdateFulfillHtlc}
+import fr.acinq.fc.app.Ticker.USD_TICKER
 import slick.jdbc.PostgresProfile.api._
 import fr.acinq.fc.app._
 import fr.acinq.fc.app.db.{Blocking, Channels}
@@ -392,10 +393,10 @@ class FCNormalRestartSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike w
     awaitCond(alice.stateName == OFFLINE)
     awaitCond(bob.stateName == OFFLINE)
 
-    alice ! HC_CMD_SUSPEND(randomKey.publicKey)
+    alice ! HC_CMD_SUSPEND(randomKey.publicKey, USD_TICKER)
     awaitCond(alice.stateName == OFFLINE) // Not leaving an OFFLINE state
 
-    bob ! HC_CMD_SUSPEND(randomKey.publicKey)
+    bob ! HC_CMD_SUSPEND(randomKey.publicKey, USD_TICKER)
     awaitCond(bob.stateName == OFFLINE) // Not leaving an OFFLINE state
 
     bob ! CMD_FULFILL_HTLC(alice2bobUpdateAdd3.id, preimage3, replyTo_opt = Some(probe.ref)) // Bob gets a fulfill for a first payment while offline
@@ -431,7 +432,7 @@ class FCNormalRestartSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike w
     awaitCond(f.bob.stateName == OFFLINE)
 
     val channelId = f.bob.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.channelId
-    Blocking.txWrite(Channels.findByRemoteNodeIdUpdatableCompiled(f.bobKit.nodeParams.nodeId.value.toArray).delete, f.aliceDB) // Alice loses channel data
+    Blocking.txWrite(Channels.findByRemoteNodeIdUpdatableCompiled(f.bobKit.nodeParams.nodeId.value.toArray, USD_TICKER.tag).delete, f.aliceDB) // Alice loses channel data
 
     val f2 = init()
     f.bob ! Worker.HCPeerConnected
@@ -449,7 +450,7 @@ class FCNormalRestartSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike w
 
     val f3 = init()
     f3.aliceKit.nodeParams.db.pendingCommands.addSettlementCommand(channelId, CMD_FULFILL_HTLC(alice2bobUpdateAdd2.id, preimage2, replyTo_opt = Some(probe.ref))) // Alice gets Bob's payment fulfilled, HC is not there
-    f3.alice ! HC_CMD_RESTORE(bobData.nodeId1, bobData)
+    f3.alice ! HC_CMD_RESTORE(bobData.nodeId1, USD_TICKER, bobData)
 
     f3.alice ! Worker.HCPeerDisconnected
     f.bob ! Worker.HCPeerDisconnected

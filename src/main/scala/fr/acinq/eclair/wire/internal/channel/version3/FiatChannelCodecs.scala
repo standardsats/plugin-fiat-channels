@@ -42,7 +42,7 @@ object FiatChannelCodecs {
       (optional(bool8, lengthDelimited(stateOverrideCodec)) withContext "overrideProposal") ::
       (optional(bool8, lengthDelimited(marginChannelCodec)) withContext "marginProposal") ::
       (optional(bool8, lengthDelimited(channelAnnouncementCodec)) withContext "channelAnnouncement") ::
-      (optional(bool8, millisatoshi) withContext "lastOracleState")
+      (optional(bool8, millisatoshi) withContext "lastAvgRate")
   }.as[HC_DATA_ESTABLISHED]
 
   val hostedStateCodec = {

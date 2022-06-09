@@ -6,6 +6,7 @@ import fr.acinq.eclair.blockchain.CurrentBlockHeight
 import fr.acinq.eclair.channel._
 import fr.acinq.eclair.payment.relay.Relayer
 import fr.acinq.eclair.wire.protocol.{TemporaryNodeFailure, UpdateAddHtlc, UpdateFailHtlc, UpdateFulfillHtlc}
+import fr.acinq.fc.app.Ticker.USD_TICKER
 import fr.acinq.fc.app.network.PreimageBroadcastCatcher
 import fr.acinq.fc.app.{AlmostTimedoutIncomingHtlc, HCTestUtils, StateUpdate, Worker}
 import org.scalatest.funsuite.FixtureAnyFunSuiteLike
@@ -74,7 +75,7 @@ class FCNormalSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike with FCS
     HCTestUtils.resetEntireDatabase(bobDB)
     reachNormal(f)
     val (preimage, alice2bobUpdateAdd) = addHtlcFromAliceToBob(100000L.msat, f, currentBlockHeight)
-    alice ! HC_CMD_EXTERNAL_FULFILL(bobKit.nodeParams.nodeId, alice2bobUpdateAdd.id, preimage)
+    alice ! HC_CMD_EXTERNAL_FULFILL(bobKit.nodeParams.nodeId, USD_TICKER, alice2bobUpdateAdd.id, preimage)
     bob ! alice2bob.expectMsgType[wire.protocol.Error]
     aliceRelayer.expectMsgType[RES_ADD_SETTLED[_, _]]
     alice2bob.expectNoMessage()
@@ -126,7 +127,7 @@ class FCNormalSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike with FCS
     bob ! Worker.HCPeerDisconnected
     awaitCond(alice.stateName == OFFLINE)
     awaitCond(bob.stateName == OFFLINE)
-    alice ! HC_CMD_EXTERNAL_FULFILL(bobKit.nodeParams.nodeId, alice2bobUpdateAdd.id, preimage)
+    alice ! HC_CMD_EXTERNAL_FULFILL(bobKit.nodeParams.nodeId, USD_TICKER, alice2bobUpdateAdd.id, preimage)
     alice2bob.expectMsgType[wire.protocol.Error] // Bob does not get it because OFFLINE
     aliceRelayer.expectMsgType[RES_ADD_SETTLED[_, _]]
     alice2bob.expectNoMessage()
@@ -448,7 +449,7 @@ class FCNormalSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike with FCS
     val (preimage2, bob2AliceUpdateAdd2) = addHtlcFromBob2Alice(10000L.msat, f)
     val (_, bob2AliceUpdateAdd3) = addHtlcFromBob2Alice(10000L.msat, f)
 
-    alice ! HC_CMD_SUSPEND(randomKey.publicKey)
+    alice ! HC_CMD_SUSPEND(randomKey.publicKey, USD_TICKER)
     bob ! alice2bob.expectMsgType[wire.protocol.Error]
     awaitCond(alice.stateName == CLOSED)
     awaitCond(bob.stateName == CLOSED)

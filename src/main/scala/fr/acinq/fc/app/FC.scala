@@ -2,7 +2,9 @@ package fr.acinq.fc.app
 
 import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.event.LoggingAdapter
+import akka.http.scaladsl.common.{NameReceptacle, NameUnmarshallerReceptacle}
 import akka.http.scaladsl.server.Route
+import akka.http.scaladsl.unmarshalling.Unmarshaller
 import akka.pattern.ask
 import akka.util.Timeout
 import fr.acinq.bitcoin.scalacompat.{ByteVector32, Satoshi, Script}
@@ -20,10 +22,11 @@ import fr.acinq.eclair.transactions.DirectedHtlc
 import fr.acinq.eclair.wire.internal.channel.version3.FiatChannelCodecs
 import fr.acinq.eclair.wire.protocol.{FailureMessage, UpdateAddHtlc}
 import fr.acinq.fc.app.channel._
-import fr.acinq.fc.app.db.{Blocking, HostedChannelsDb, HostedUpdatesDb, PreimagesDb}
+import fr.acinq.fc.app.db.{Blocking, HostedChannelsDb, HostedUpdatesDb, PreimagesDb, RatesDb}
 import fr.acinq.fc.app.FC._
+import fr.acinq.fc.app.Ticker.{EUR_TICKER, USD_TICKER}
 import fr.acinq.fc.app.network.{HostedSync, OperationalData, PHC, PreimageBroadcastCatcher}
-import fr.acinq.fc.app.rate.{BinanceSourceModified, CentralBankOracle, EcbSource, RateOracle}
+import fr.acinq.fc.app.rate.{BinanceSourceModified, CentralBankOracle, EcbSource, RateOracle, RateSource}
 import scodec.bits.ByteVector
 
 import scala.collection.mutable
@@ -101,6 +104,7 @@ object FC {
 
 class FC extends Plugin with RouteProvider {
   var channelsDb: HostedChannelsDb = _
+  var ratesDb: RatesDb = _
   var preimageRef: ActorRef = _
   var workerRef: ActorRef = _
   var syncRef: ActorRef = _
@@ -113,15 +117,21 @@ class FC extends Plugin with RouteProvider {
     config = new Config(datadir = setup.datadir)
     Try(Blocking createTablesIfNotExist config.db)
     channelsDb = new HostedChannelsDb(config.db)
+    ratesDb = new RatesDb(config.db)
   }
 
   override def onKit(eclairKit: Kit): Unit = {
     implicit val coreActorSystem: ActorSystem = eclairKit.system
     preimageRef = eclairKit.system actorOf Props(classOf[PreimageBroadcastCatcher], new PreimagesDb(config.db), eclairKit, config.vals)
     syncRef = eclairKit.system actorOf Props(classOf[HostedSync], eclairKit, new HostedUpdatesDb(config.db), config.vals.phcConfig)
-    rateOracleRef = eclairKit.system actorOf Props(classOf[RateOracle], eclairKit, new BinanceSourceModified(x => x, "BTCEUR", implicitly))
-    // ecbOracleRef = eclairKit.system actorOf Props(classOf[CentralBankOracle], eclairKit, new EcbSource("USD", implicitly))
-    workerRef = eclairKit.system actorOf Props(classOf[Worker], eclairKit, syncRef, rateOracleRef, preimageRef, channelsDb, config)
+
+    var sources: Map[Ticker, RateSource] = Map.empty
+    sources += USD_TICKER -> (new BinanceSourceModified(x => x, USD_TICKER, "BTCUSDT", implicitly))
+    sources += EUR_TICKER -> (new BinanceSourceModified(x => x, EUR_TICKER, "BTCEUR", implicitly))
+    rateOracleRef = eclairKit.system actorOf Props(classOf[RateOracle], eclairKit, ratesDb, sources)
+    //ecbOracleRef = eclairKit.system actorOf Props(classOf[CentralBankOracle], eclairKit, new EcbSource(USD_TICKER, implicitly))
+    workerRef = eclairKit.system actorOf Props(classOf[Worker], eclairKit, syncRef, preimageRef, channelsDb, config)
+
     kit = eclairKit
   }
 
@@ -161,6 +171,12 @@ class FC extends Plugin with RouteProvider {
     import scala.concurrent.ExecutionContext.Implicits.global
 
     val hostedStateUnmarshaller = "state".as[ByteVector](binaryDataUnmarshaller)
+    val tickerParam: NameUnmarshallerReceptacle[Ticker] =
+      "ticker".as[Ticker](Unmarshaller.strict { str: String =>
+        Ticker
+          .tickerByTag(str)
+          .getOrElse(throw new IllegalArgumentException(s"Unknown ticker ${str}"))
+      })
 
     def getHostedStateResult(state: ByteVector) = {
       val remoteState = FiatChannelCodecs.hostedStateCodec.decodeValue(state.toBitVector).require
@@ -175,15 +191,15 @@ class FC extends Plugin with RouteProvider {
     }
 
     val invoke: Route = postRequest("fc-invoke") { implicit t =>
-      formFields("refundAddress", "secret".as[ByteVector](binaryDataUnmarshaller), nodeIdFormParam) { case (refundAddress, secret, remoteNodeId) =>
+      formFields("refundAddress", "secret".as[ByteVector](binaryDataUnmarshaller), nodeIdFormParam, tickerParam) { case (refundAddress, secret, remoteNodeId, ticker) =>
         val refundPubkeyScript = Script.write(fr.acinq.eclair.addressToPublicKeyScript(refundAddress, kit.nodeParams.chainHash))
-        completeCommand(HC_CMD_LOCAL_INVOKE(remoteNodeId, refundPubkeyScript, secret))
+        completeCommand(HC_CMD_LOCAL_INVOKE(remoteNodeId, ticker, refundPubkeyScript, secret))
       }
     }
 
     val externalFulfill: Route = postRequest("fc-externalfulfill") { implicit t =>
-      formFields("htlcId".as[Long], "paymentPreimage".as[ByteVector32], nodeIdFormParam) { case (htlcId, paymentPreimage, remoteNodeId) =>
-        completeCommand(HC_CMD_EXTERNAL_FULFILL(remoteNodeId, htlcId, paymentPreimage))
+      formFields("htlcId".as[Long], "paymentPreimage".as[ByteVector32], nodeIdFormParam, tickerParam) { case (htlcId, paymentPreimage, remoteNodeId, ticker) =>
+        completeCommand(HC_CMD_EXTERNAL_FULFILL(remoteNodeId, ticker, htlcId, paymentPreimage))
       }
     }
 
@@ -203,50 +219,50 @@ class FC extends Plugin with RouteProvider {
     }
 
     val findByRemoteId: Route = postRequest("fc-findbyremoteid") { implicit t =>
-      formFields(nodeIdFormParam) { remoteNodeId =>
-        completeCommand(HC_CMD_GET_INFO(remoteNodeId))
+      formFields(nodeIdFormParam, tickerParam) { (remoteNodeId, ticker) =>
+        completeCommand(HC_CMD_GET_INFO(remoteNodeId, ticker))
       }
     }
 
     val overridePropose: Route = postRequest("fc-overridepropose") { implicit t =>
-      formFields("newLocalBalanceMsat".as[MilliSatoshi], nodeIdFormParam) { case (newLocalBalance, remoteNodeId) =>
-        completeCommand(HC_CMD_OVERRIDE_PROPOSE(remoteNodeId, newLocalBalance))
+      formFields("newLocalBalanceMsat".as[MilliSatoshi], nodeIdFormParam, tickerParam) { case (newLocalBalance, remoteNodeId, ticker) =>
+        completeCommand(HC_CMD_OVERRIDE_PROPOSE(remoteNodeId, ticker, newLocalBalance))
       }
     }
 
     val overrideAccept: Route = postRequest("fc-overrideaccept") { implicit t =>
-      formFields(nodeIdFormParam) { remoteNodeId =>
-        completeCommand(HC_CMD_OVERRIDE_ACCEPT(remoteNodeId))
+      formFields(nodeIdFormParam, tickerParam) { (remoteNodeId, ticker) =>
+        completeCommand(HC_CMD_OVERRIDE_ACCEPT(remoteNodeId, ticker))
       }
     }
 
     val makePublic: Route = postRequest("fc-makepublic") { implicit t =>
-      formFields(nodeIdFormParam) { remoteNodeId =>
-        completeCommand(HC_CMD_PUBLIC(remoteNodeId))
+      formFields(nodeIdFormParam, tickerParam) { (remoteNodeId, ticker) =>
+        completeCommand(HC_CMD_PUBLIC(remoteNodeId, ticker))
       }
     }
 
     val makePrivate: Route = postRequest("fc-makeprivate") { implicit t =>
-      formFields(nodeIdFormParam) { remoteNodeId =>
-        completeCommand(HC_CMD_PRIVATE(remoteNodeId))
+      formFields(nodeIdFormParam, tickerParam) { (remoteNodeId, ticker) =>
+        completeCommand(HC_CMD_PRIVATE(remoteNodeId, ticker))
       }
     }
 
     val resize: Route = postRequest("fc-resize") { implicit t =>
-      formFields("newCapacitySat".as[Satoshi], nodeIdFormParam) { case (newCapacity, remoteNodeId) =>
-        completeCommand(HC_CMD_RESIZE(remoteNodeId, newCapacity))
+      formFields("newCapacitySat".as[Satoshi], nodeIdFormParam, tickerParam) { case (newCapacity, remoteNodeId, ticker) =>
+        completeCommand(HC_CMD_RESIZE(remoteNodeId, ticker, newCapacity))
       }
     }
 
     val margin: Route = postRequest("fc-margin") { implicit t =>
-      formFields("newCapacitySat".as[Satoshi], "newRate".as[MilliSatoshi], nodeIdFormParam) { case (newCapacity, newRate, remoteNodeId) =>
-        completeCommand(HC_CMD_MARGIN(remoteNodeId, newCapacity, newRate))
+      formFields("newCapacitySat".as[Satoshi], "newRate".as[MilliSatoshi], nodeIdFormParam, tickerParam) { case (newCapacity, newRate, remoteNodeId, ticker) =>
+        completeCommand(HC_CMD_MARGIN(remoteNodeId, ticker, newCapacity, newRate))
       }
     }
 
     val suspend: Route = postRequest("fc-suspend") { implicit t =>
-      formFields(nodeIdFormParam) { remoteNodeId =>
-        completeCommand(HC_CMD_SUSPEND(remoteNodeId))
+      formFields(nodeIdFormParam, tickerParam) { (remoteNodeId, tickerParam) =>
+        completeCommand(HC_CMD_SUSPEND(remoteNodeId, tickerParam))
       }
     }
 
@@ -260,7 +276,7 @@ class FC extends Plugin with RouteProvider {
       formFields(hostedStateUnmarshaller) { state =>
         val RemoteHostedStateResult(remoteState, Some(remoteNodeId), isLocalSigOk) = getHostedStateResult(state)
         require(isLocalSigOk, "Can't proceed: local signature of provided HC state is invalid")
-        completeCommand(HC_CMD_RESTORE(remoteNodeId, remoteState))
+        completeCommand(HC_CMD_RESTORE(remoteNodeId, remoteState.lastCrossSignedState.initHostedChannel.ticker, remoteState))
       }
     }
 
@@ -306,6 +322,7 @@ case class FCSuspended(nodeId: PublicKey, isHost: Boolean, isLocal: Boolean, des
   override def senderEntity: String = "FC"
 }
 
-case class FCHedgeLiability(channel: String, amount: MilliSatoshi, rate: MilliSatoshi) extends fr.acinq.alarmbot.ExternalHedgeMessage {
+case class FCHedgeLiability(channel: String, tickerStr: String, amount: MilliSatoshi, rate: MilliSatoshi) extends fr.acinq.alarmbot.ExternalHedgeMessage {
   override def senderEntity: String = "FC"
+  override def ticker: String = tickerStr
 }

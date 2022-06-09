@@ -1,7 +1,6 @@
 package fr.acinq.fc.app
 
 import java.net.InetSocketAddress
-
 import akka.actor.ActorSystem
 import akka.testkit.{TestFSMRef, TestProbe}
 import fr.acinq.bitcoin.scalacompat.Crypto.PublicKey
@@ -13,6 +12,7 @@ import fr.acinq.eclair.router.Router.Data
 import fr.acinq.eclair.router.{Announcements, BaseRouterSpec, Router, SyncProgress}
 import fr.acinq.eclair.wire.internal.channel.version3.FCProtocolCodecs
 import fr.acinq.eclair.wire.protocol.UnknownMessage
+import fr.acinq.fc.app.Ticker.USD_TICKER
 import fr.acinq.fc.app.db.HostedUpdatesDb
 import fr.acinq.fc.app.network.HostedSync.{GotAllSyncFrom, SendSyncTo, TickSendGossip}
 import fr.acinq.fc.app.network._
@@ -54,7 +54,8 @@ class PHCSyncSpec extends BaseRouterSpec {
     assert(peer.expectMsgType[OutgoingMessage].msg.asInstanceOf[UnknownMessage].tag == FC.HC_QUERY_PUBLIC_HOSTED_CHANNELS_TAG)
     awaitCond(syncActor.stateName == DOING_PHC_SYNC)
 
-    val shortId = Tools.hostedShortChanId(a.value, b.value)
+    val ticker = USD_TICKER
+    val shortId = Tools.hostedShortChanId(a.value, b.value, ticker)
     val randomSig: ByteVector64 = Crypto.sign(randomBytes32, randomKey)
     val announce = Announcements.makeChannelAnnouncement(Block.RegtestGenesisBlock.hash, shortId, a, b, a, b, randomSig, randomSig, randomSig, randomSig)
     val update1 = Announcements.makeChannelUpdate(Block.RegtestGenesisBlock.hash, priv_a, b, shortId, CltvExpiryDelta(5), 7000000.msat, 50000.msat, 100, config.minCapacity, enable = true)
@@ -81,7 +82,7 @@ class PHCSyncSpec extends BaseRouterSpec {
 
     {
       // Getting invalid gossip (wrong announce format)
-      val shortId = Tools.hostedShortChanId(c.value, a.value)
+      val shortId = Tools.hostedShortChanId(c.value, a.value, ticker)
       val randomSig: ByteVector64 = Crypto.sign(randomBytes32, randomKey)
       val announce = Announcements.makeChannelAnnouncement(Block.RegtestGenesisBlock.hash, shortId, c, a, b, d, randomSig, randomSig, randomSig, randomSig) // nodeId != bitcoinKey
       val update1 = Announcements.makeChannelUpdate(Block.RegtestGenesisBlock.hash, priv_c, a, shortId, CltvExpiryDelta(5), 7000000.msat, 50000.msat, 100, config.minCapacity, enable = true)
@@ -94,7 +95,7 @@ class PHCSyncSpec extends BaseRouterSpec {
 
     {
       // Getting gossip
-      val shortId = Tools.hostedShortChanId(c.value, d.value)
+      val shortId = Tools.hostedShortChanId(c.value, d.value, ticker)
       val randomSig: ByteVector64 = Crypto.sign(randomBytes32, randomKey)
       val announce = Announcements.makeChannelAnnouncement(Block.RegtestGenesisBlock.hash, shortId, c, d, c, d, randomSig, randomSig, randomSig, randomSig)
       val update1 = Announcements.makeChannelUpdate(Block.RegtestGenesisBlock.hash, priv_c, d, shortId, CltvExpiryDelta(5), 7000000.msat, 50000.msat, 100, config.minCapacity, enable = true)
@@ -107,7 +108,7 @@ class PHCSyncSpec extends BaseRouterSpec {
 
     {
       // Getting invalid gossip (too many PHC)
-      val shortId = Tools.hostedShortChanId(c.value, d.value)
+      val shortId = Tools.hostedShortChanId(c.value, d.value, ticker)
       val randomSig: ByteVector64 = Crypto.sign(randomBytes32, randomKey)
       val announce = Announcements.makeChannelAnnouncement(Block.RegtestGenesisBlock.hash, shortId, c, a, c, a, randomSig, randomSig, randomSig, randomSig)
       val update1 = Announcements.makeChannelUpdate(Block.RegtestGenesisBlock.hash, priv_a, c, shortId, CltvExpiryDelta(5), 7000000.msat, 50000.msat, 100, config.minCapacity, enable = true)
