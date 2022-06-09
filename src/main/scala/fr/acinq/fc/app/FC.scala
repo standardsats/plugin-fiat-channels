@@ -105,7 +105,7 @@ class FC extends Plugin with RouteProvider {
   var workerRef: ActorRef = _
   var syncRef: ActorRef = _
   var rateOracleRef: ActorRef = _
-  var ecbOracleRef: ActorRef = _
+  //var ecbOracleRef: ActorRef = _
   var config: Config = _
   var kit: Kit = _
 
@@ -120,7 +120,7 @@ class FC extends Plugin with RouteProvider {
     preimageRef = eclairKit.system actorOf Props(classOf[PreimageBroadcastCatcher], new PreimagesDb(config.db), eclairKit, config.vals)
     syncRef = eclairKit.system actorOf Props(classOf[HostedSync], eclairKit, new HostedUpdatesDb(config.db), config.vals.phcConfig)
     rateOracleRef = eclairKit.system actorOf Props(classOf[RateOracle], eclairKit, new BinanceSourceModified(x => x, "BTCEUR", implicitly))
-    ecbOracleRef = eclairKit.system actorOf Props(classOf[CentralBankOracle], eclairKit, new EcbSource("USD", implicitly))
+    // ecbOracleRef = eclairKit.system actorOf Props(classOf[CentralBankOracle], eclairKit, new EcbSource("USD", implicitly))
     workerRef = eclairKit.system actorOf Props(classOf[Worker], eclairKit, syncRef, rateOracleRef, preimageRef, channelsDb, config)
     kit = eclairKit
   }
@@ -278,7 +278,7 @@ class FC extends Plugin with RouteProvider {
     }
 
     invoke ~ externalFulfill ~ allChannels ~ findByRemoteId ~ overridePropose ~ overrideAccept ~
-      makePublic ~ makePrivate ~ resize ~ suspend ~ verifyRemoteState ~ restoreFromRemoteState ~
+      resize ~ suspend ~ verifyRemoteState ~ restoreFromRemoteState ~
       broadcastPreimages ~ hotChannels
   }
 }

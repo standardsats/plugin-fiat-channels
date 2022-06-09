@@ -78,117 +78,19 @@
   </build>
   <dependencies>
     <dependency>
-      <groupId>org.scala-lang</groupId>
-      <artifactId>scala-library</artifactId>
-      <version>2.13.6</version>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>fr.acinq.eclair</groupId>
-      <artifactId>eclair-core_2.13</artifactId>
-      <version>0.7.1-SNAPSHOT</version>
-      <scope>provided</scope>
-      <exclusions>
-        <exclusion>
-          <artifactId>scala-collection-contrib_2.13</artifactId>
-          <groupId>org.scala-lang.modules</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>akka-actor_2.13</artifactId>
-          <groupId>com.typesafe.akka</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>akka-actor-typed_2.13</artifactId>
-          <groupId>com.typesafe.akka</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>akka-slf4j_2.13</artifactId>
-          <groupId>com.typesafe.akka</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>akka-cluster_2.13</artifactId>
-          <groupId>com.typesafe.akka</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>akka-cluster-typed_2.13</artifactId>
-          <groupId>com.typesafe.akka</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>akka-cluster-tools_2.13</artifactId>
-          <groupId>com.typesafe.akka</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>okhttp-backend_2.13</artifactId>
-          <groupId>com.softwaremill.sttp.client3</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>json4s-jackson_2.13</artifactId>
-          <groupId>org.json4s</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>json4s_2.13</artifactId>
-          <groupId>com.softwaremill.sttp.client3</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>netty-all</artifactId>
-          <groupId>io.netty</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>bitcoin-lib_2.13</artifactId>
-          <groupId>fr.acinq</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>jeromq</artifactId>
-          <groupId>org.zeromq</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>grizzled-slf4j_2.13</artifactId>
-          <groupId>org.clapper</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>jheaps</artifactId>
-          <groupId>org.jheaps</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>sqlite-jdbc</artifactId>
-          <groupId>org.xerial</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>postgresql</artifactId>
-          <groupId>org.postgresql</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>bcprov-jdk15on</artifactId>
-          <groupId>org.bouncycastle</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>jsr305</artifactId>
-          <groupId>com.google.code.findbugs</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>guava</artifactId>
-          <groupId>com.google.guava</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>quicklens_2.13</artifactId>
-          <groupId>com.softwaremill.quicklens</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>kamon-core_2.13</artifactId>
-          <groupId>io.kamon</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>kamon-akka_2.13</artifactId>
-          <groupId>io.kamon</groupId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <dependency>
       <groupId>fr.acinq.eclair</groupId>
       <artifactId>eclair-node_2.13</artifactId>
       <version>0.7.1-SNAPSHOT</version>
       <scope>provided</scope>
       <exclusions>
+        <exclusion>
+          <artifactId>eclair-core_2.13</artifactId>
+          <groupId>fr.acinq.eclair</groupId>
+        </exclusion>
+        <exclusion>
+          <artifactId>logback-classic</artifactId>
+          <groupId>ch.qos.logback</groupId>
+        </exclusion>
         <exclusion>
           <artifactId>janino</artifactId>
           <groupId>org.codehaus.janino</groupId>
@@ -225,94 +127,6 @@
       <version>0.7.1-SNAPSHOT</version>
       <scope>provided</scope>
     </dependency>
-    <dependency>
-      <groupId>com.typesafe.akka</groupId>
-      <artifactId>akka-testkit_2.13</artifactId>
-      <version>2.6.18</version>
-      <scope>test</scope>
-      <exclusions>
-        <exclusion>
-          <artifactId>akka-actor_2.13</artifactId>
-          <groupId>com.typesafe.akka</groupId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <dependency>
-      <groupId>com.typesafe.akka</groupId>
-      <artifactId>akka-actor-testkit-typed_2.13</artifactId>
-      <version>2.6.18</version>
-      <scope>test</scope>
-      <exclusions>
-        <exclusion>
-          <artifactId>akka-actor-typed_2.13</artifactId>
-          <groupId>com.typesafe.akka</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>akka-slf4j_2.13</artifactId>
-          <groupId>com.typesafe.akka</groupId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <dependency>
-      <groupId>ch.qos.logback</groupId>
-      <artifactId>logback-classic</artifactId>
-      <version>1.2.3</version>
-      <scope>test</scope>
-      <exclusions>
-        <exclusion>
-          <artifactId>logback-core</artifactId>
-          <groupId>ch.qos.logback</groupId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <dependency>
-      <groupId>org.mockito</groupId>
-      <artifactId>mockito-scala-scalatest_2.13</artifactId>
-      <version>1.5.9</version>
-      <scope>test</scope>
-      <exclusions>
-        <exclusion>
-          <artifactId>mockito-scala_2.13</artifactId>
-          <groupId>org.mockito</groupId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <dependency>
-      <groupId>com.opentable.components</groupId>
-      <artifactId>otj-pg-embedded</artifactId>
-      <version>0.13.3</version>
-      <scope>test</scope>
-      <exclusions>
-        <exclusion>
-          <artifactId>commons-lang3</artifactId>
-          <groupId>org.apache.commons</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>commons-compress</artifactId>
-          <groupId>org.apache.commons</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>xz</artifactId>
-          <groupId>org.tukaani</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>commons-io</artifactId>
-          <groupId>commons-io</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>spotbugs-annotations</artifactId>
-          <groupId>com.github.spotbugs</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>jcl-over-slf4j</artifactId>
-          <groupId>org.slf4j</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>postgresql</artifactId>
-          <groupId>org.postgresql</groupId>
-        </exclusion>
-      </exclusions>
-    </dependency>
   </dependencies>
   <properties>
     <scala.version.short>2.13</scala.version.short>
@@ -320,7 +134,8 @@
     <maven.compiler.source>11</maven.compiler.source>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <akka.version>2.6.18</akka.version>
-    <scala.version>2.13.6</scala.version>
+    <scala.version>2.13.8</scala.version>
+    <bitcoinlib.version>0.23</bitcoinlib.version>
     <eclair.version>0.7.1-SNAPSHOT</eclair.version>
   </properties>
 </project>

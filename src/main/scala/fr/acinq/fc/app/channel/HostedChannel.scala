@@ -3,8 +3,7 @@ package fr.acinq.fc.app.channel
 import akka.pattern._
 import akka.actor.{Actor, ActorRef, ExtendedActorSystem, FSM, PoisonPill, Props, Terminated}
 import com.softwaremill.quicklens._
-import fr.acinq.bitcoin.scalacompat.Crypto.PublicKey
-import fr.acinq.bitcoin.scalacompat.{ByteVector32, ByteVector64, Crypto, SatoshiLong}
+import fr.acinq.bitcoin.scalacompat.{ByteVector32, ByteVector64, Crypto, Satoshi, SatoshiLong}
 import fr.acinq.eclair._
 import fr.acinq.eclair.blockchain.CurrentBlockHeight
 import fr.acinq.eclair.blockchain.fee.FeeratePerKw
@@ -22,20 +21,21 @@ import fr.acinq.fc.app._
 import fr.acinq.fc.app.db.Blocking.{span, timeout}
 import fr.acinq.fc.app.db.HostedChannelsDb
 import fr.acinq.fc.app.network.{HostedSync, OperationalData, PHC, PreimageBroadcastCatcher}
-import fr.acinq.fc.app.rate.{CentralBankOracle, RateOracle}
-import scodec.bits.ByteVector
 
+import scodec.bits.ByteVector
 import java.util.UUID
 import scala.concurrent.Await
-import scala.concurrent.duration._
 import scala.util.{Failure, Success}
+
+import fr.acinq.fc.app.rate.{CentralBankOracle, RateOracle}
+import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
 
 object HostedChannel {
   case class SendAnnouncements(force: Boolean)
 }
 
-class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannelsDb, hostedSync: ActorRef, cfg: Config) extends FSMDiagnosticActorLogging[ChannelState, HostedData] {
+class HostedChannel(kit: Kit, remoteNodeId: Crypto.PublicKey, channelsDb: HostedChannelsDb, hostedSync: ActorRef, cfg: Config) extends FSMDiagnosticActorLogging[ChannelState, HostedData] {
 
   lazy val channelId: ByteVector32 = Tools.hostedChanId(kit.nodeParams.nodeId.value, remoteNodeId.value)
 
@@ -121,7 +121,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
 
     case Event(clientSU: StateUpdate, data: HC_DATA_HOST_WAIT_CLIENT_STATE_UPDATE) =>
       val fullySignedLCSS = LastCrossSignedState(isHost = true, data.invoke.refundScriptPubKey, initHostedChannel = cfg.vals.hcParams.initMsg(data.rate), clientSU.blockDay,
-        localBalanceMsat = cfg.vals.hcParams.initMsg(0L.msat).channelCapacityMsat, remoteBalanceMsat = MilliSatoshi(0L), rate=data.rate, localUpdates = 0L, remoteUpdates = 0L, incomingHtlcs = Nil,
+        localBalanceMsat = cfg.vals.hcParams.initMsg(0L.msat).channelCapacityMsat, remoteBalanceMsat = 0L.msat, rate=data.rate, localUpdates = 0L, remoteUpdates = 0L, incomingHtlcs = Nil,
         outgoingHtlcs = Nil, remoteSigOfLocal = clientSU.localSigOfRemoteLCSS, localSigOfRemote = ByteVector64.Zeroes).withLocalSigOfRemote(kit.nodeParams.privateKey)
 
       val dh = new DuplicateHandler[HC_DATA_ESTABLISHED] {
@@ -307,7 +307,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
       RateOracle.getCurrentRate() match {
         case Some(oracleRate) =>
           log.info(s"Current oracle rate is ${oracleRate}")
-          val newRate = if (oracleRate == 0.msat) data.commitments.lastCrossSignedState.rate else oracleRate
+          val newRate = if (oracleRate == 0L.msat) data.commitments.lastCrossSignedState.rate else oracleRate
           val commitments = data.marginProposal.map(data.withMargin).getOrElse(data.resizeProposal.map(data.withResize).getOrElse(data)).commitments
           val nextLocalLCSS = commitments.nextLocalUnsignedLCSSWithRate(log, currentBlockDay, newRate)
           if (commitments.validateFiatSpend(log, newRate)) {
@@ -636,7 +636,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
 
   def restoreEmptyData(localLCSS: LastCrossSignedState): HC_DATA_ESTABLISHED =
     HC_DATA_ESTABLISHED(HostedCommitments(localNodeId = kit.nodeParams.nodeId, remoteNodeId, channelId,
-      CommitmentSpec(htlcs = Set.empty, FeeratePerKw(0L.sat), localLCSS.localBalanceMsat, localLCSS.remoteBalanceMsat), originChannels = Map.empty,
+      CommitmentSpec(htlcs = Set.empty, FeeratePerKw(0.sat), localLCSS.localBalanceMsat, localLCSS.remoteBalanceMsat), originChannels = Map.empty,
       localLCSS, nextLocalUpdates = Nil, nextRemoteUpdates = Nil, announceChannel = false), makeChannelUpdate(localLCSS, enable = true), localErrors = Nil)
 
   def withLocalError(data: HC_DATA_ESTABLISHED, errorCode: String): (HC_DATA_ESTABLISHED, Error) = {
@@ -862,10 +862,10 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, channelsDb: HostedChannel
       if(delta != 0.msat) {
         RateOracle.getCurrentRate() match {
           case Some(oracleRate) => {
-              val eurPrice = CentralBankOracle.getCurrentRate()
+              // val eurPrice = CentralBankOracle.getCurrentRate()
               // Warning: crossRate is relevant for EUR channels only
-              val crossRate = (math round (oracleRate.toLong / eurPrice)).msat
-              context.system.eventStream publish FCHedgeLiability(shortChannelId.toString(), delta, crossRate)
+              // val crossRate = (math round (oracleRate.toLong / eurPrice)).msat
+              context.system.eventStream publish FCHedgeLiability(shortChannelId.toString(), delta, oracleRate)
           }
           case None =>
             log.error("Oracle price is not defined, not sending it to the client yet")

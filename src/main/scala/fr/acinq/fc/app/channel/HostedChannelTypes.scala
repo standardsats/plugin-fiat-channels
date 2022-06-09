@@ -7,6 +7,7 @@ import fr.acinq.bitcoin.scalacompat.Crypto.{PrivateKey, PublicKey}
 import fr.acinq.bitcoin.scalacompat.{ByteVector32, ByteVector64, Crypto, Satoshi, SatoshiLong}
 import fr.acinq.eclair._
 import fr.acinq.eclair.channel._
+import fr.acinq.eclair.channel.fsm.Channel
 import fr.acinq.eclair.payment.OutgoingPaymentPacket
 import fr.acinq.eclair.transactions.{CommitmentSpec, DirectedHtlc}
 import fr.acinq.eclair.wire.protocol._
@@ -15,7 +16,6 @@ import fr.acinq.fc.app.network.PHC
 import scodec.bits.ByteVector
 
 import scala.concurrent.duration._
-import scala.language.postfixOps
 
 
 case class HostedChannelRestored(channel: ActorRef, channelId: ByteVector32, peer: ActorRef, remoteNodeId: PublicKey) extends AbstractChannelRestored

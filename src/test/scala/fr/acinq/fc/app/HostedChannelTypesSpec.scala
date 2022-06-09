@@ -2,7 +2,6 @@ package fr.acinq.fc.app
 
 import java.util.UUID
 
-import fr.acinq.bitcoin.scalacompat.Crypto.PublicKey
 import fr.acinq.eclair._
 import fr.acinq.bitcoin.scalacompat.{Block, ByteVector32, ByteVector64, Crypto, SatoshiLong}
 import fr.acinq.eclair.blockchain.fee.FeeratePerKw
@@ -36,7 +35,7 @@ class HostedChannelTypesSpec extends AnyFunSuite {
 
   val lcss1: LastCrossSignedState = lcss.copy(incomingHtlcs = Nil, outgoingHtlcs = Nil)
 
-  val localCommitmentSpec: CommitmentSpec = CommitmentSpec(htlcs = Set.empty, FeeratePerKw(0L.sat), lcss1.localBalanceMsat, lcss1.remoteBalanceMsat)
+  val localCommitmentSpec: CommitmentSpec = CommitmentSpec(htlcs = Set.empty, FeeratePerKw(0.sat), lcss1.localBalanceMsat, lcss1.remoteBalanceMsat)
 
   val channelUpdate: ChannelUpdate = ChannelUpdate(randomBytes64, Block.RegtestGenesisBlock.hash, ShortChannelId(1), TimestampSecond(2), ChannelUpdate.ChannelFlags.DUMMY, CltvExpiryDelta(3), 4.msat, 5.msat, 6, None)
 
@@ -71,7 +70,7 @@ class HostedChannelTypesSpec extends AnyFunSuite {
     assert(bobLocallySignedLCSS.reverse.verifyRemoteSig(bobPrivKey.publicKey)) // Alice verifies Bob remote sig of Alice local view of LCSS
   }
 
-  def makeCmdAdd(amount: MilliSatoshi, destination: PublicKey, currentBlockHeight: BlockHeight): (ByteVector32, CMD_ADD_HTLC) = {
+  def makeCmdAdd(amount: MilliSatoshi, destination: Crypto.PublicKey, currentBlockHeight: BlockHeight): (ByteVector32, CMD_ADD_HTLC) = {
     val payment_preimage: ByteVector32 = randomBytes32
     val payment_hash: ByteVector32 = Crypto.sha256(payment_preimage)
     val expiry = CltvExpiryDelta(144).toCltvExpiry(currentBlockHeight)
