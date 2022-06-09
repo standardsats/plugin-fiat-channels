@@ -855,7 +855,7 @@ class HostedChannel(kit: Kit, remoteNodeId: Crypto.PublicKey, ticker: Ticker, ch
       // delta > 0 => client balance increased
       val delta = commits1.lastCrossSignedState.remoteBalanceMsat - data.commitments.lastCrossSignedState.remoteBalanceMsat
       // delta == 0 means rate adjustment
-      if(delta != 0.msat) {
+      if(delta > 1000.msat || delta < -1000.msat) {
         currentRate(data, ticker) match {
           case Some(oracleRate) => {
             /*
