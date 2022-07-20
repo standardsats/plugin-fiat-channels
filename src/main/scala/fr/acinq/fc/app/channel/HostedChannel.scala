@@ -316,8 +316,10 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
           val commitments = data.marginProposal.map(data.withMargin).getOrElse(data.resizeProposal.map(data.withResize).getOrElse(data)).commitments
           val nextLocalLCSS = commitments.nextLocalUnsignedLCSSWithRate(log, currentBlockDay, newRate)
           if (commitments.validateFiatSpend(log, newRate)) {
-            log.info(s"Setting next lastAvgRate: ${Some(nextLocalLCSS.rate)} and sending StateUpdate message")
-            stay StoringAndUsing data.copy(lastAvgRate = Some(nextLocalLCSS.rate)) SendingHosted nextLocalLCSS.withLocalSigOfRemote(kit.nodeParams.privateKey).stateUpdate
+            log.info(s"Setting next lastAvgRate: ${nextLocalLCSS.rate} and sending StateUpdate message")
+            val nextLastAvgRate = data.lastAvgRate + nextLocalLCSS.rate
+            log.info(s"Total set of lastAvgRate: ${nextLastAvgRate}")
+            stay StoringAndUsing data.copy(lastAvgRate = nextLastAvgRate) SendingHosted nextLocalLCSS.withLocalSigOfRemote(kit.nodeParams.privateKey).stateUpdate
           } else {
             log.error("Tried to spend more fiat that was in the channel")
             val (finalData, error) = withLocalError(data, ErrorCodes.ERR_NOT_ENOUGH_FIAT)
@@ -642,7 +644,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
     HC_DATA_ESTABLISHED(HostedCommitments(localNodeId = kit.nodeParams.nodeId, remoteNodeId, channelId,
       CommitmentSpec(htlcs = Set.empty, FeeratePerKw(0L.sat), localLCSS.localBalanceMsat, localLCSS.remoteBalanceMsat), originChannels = Map.empty,
       localLCSS, nextLocalUpdates = Nil, nextRemoteUpdates = Nil, announceChannel = false), makeChannelUpdate(localLCSS, enable = true), localErrors = Nil,
-      lastAvgRate = None)
+      lastAvgRate = Set.empty)
 
   def withLocalError(data: HC_DATA_ESTABLISHED, errorCode: String): (HC_DATA_ESTABLISHED, Error) = {
     val localErrorExt: ErrorExt = ErrorExt generateFrom Error(channelId = channelId, msg = errorCode)
@@ -819,8 +821,8 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
     log.info(s"Channel old rate is ${data.commitments.lastCrossSignedState.rate}")
     log.info(s"My last known avg rate after local sign: ${data.lastAvgRate}")
     log.info(s"Their new rate is ${remoteSU.rate}")
-    val knownRate = data.lastAvgRate.getOrElse(data.commitments.lastCrossSignedState.rate)
-    log.info(s"Last known avg rate of the channel: ${knownRate}")
+    val knownRates = data.lastAvgRate + data.commitments.lastCrossSignedState.rate
+    log.info(s"Last known avg rate of the channel: ${knownRates}")
 
     val lcss1 = data.commitments.nextLocalUnsignedLCSS(remoteSU.blockDay).copy(rate = remoteSU.rate, remoteSigOfLocal = remoteSU.localSigOfRemoteLCSS).withLocalSigOfRemote(kit.nodeParams.privateKey)
     log.info(s"New channel rate is ${lcss1.rate}")
@@ -849,8 +851,8 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
             goto(CLOSED) StoringAndUsing data1 SendingHasChannelId error
         }
       }
-    } else if (remoteSU.rate != knownRate) {
-      log.info(s"Margin rate is higher than expected. Our last avg rate: ${knownRate}, client wants: ${remoteSU.rate}")
+    } else if (!knownRates(remoteSU.rate)) {
+      log.info(s"While signing new state the user rate is higher than expected. Our last avg rate: ${knownRates}, client wants: ${remoteSU.rate}")
       val (data1, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_INVALID_ORACLE_PRICE)
       goto(CLOSED) StoringAndUsing data1 SendingHasChannelId error
     } else {
@@ -876,7 +878,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
             stay
         }
       }
-      stay StoringAndUsing data.copy(commitments = commitments1, lastAvgRate = None) RelayingRemoteUpdates data.commitments SendingHosted commits1.lastCrossSignedState.stateUpdate
+      stay StoringAndUsing data.copy(commitments = commitments1, lastAvgRate = data.lastAvgRate - remoteSU.rate) RelayingRemoteUpdates data.commitments SendingHosted commits1.lastCrossSignedState.stateUpdate
     }
 
   }
@@ -887,5 +889,5 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
   }
 
   private def currentRate(data: HC_DATA_ESTABLISHED, ticker: Ticker): Option[MilliSatoshi] =
-    data.lastAvgRate.orElse(RateOracle.getCurrentRate(ticker))
+    RateOracle.getCurrentRate(ticker)
 }

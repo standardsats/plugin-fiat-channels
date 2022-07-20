@@ -2,17 +2,25 @@ package fr.acinq.fc.app.db
 
 import fr.acinq.bitcoin.ByteVector32
 import fr.acinq.bitcoin.Crypto.PublicKey
-import fr.acinq.eclair.wire.internal.channel.version3.FiatChannelCodecs.HC_DATA_ESTABLISHED_Codec
+import fr.acinq.eclair.wire.internal.channel.version3.FiatChannelCodecs.{HC_DATA_ESTABLISHED_Codec_V0, HC_DATA_ESTABLISHED_Codec}
 import fr.acinq.fc.app.{Ticker, Tools}
 import fr.acinq.fc.app.channel.HC_DATA_ESTABLISHED
 import fr.acinq.fc.app.db.Blocking.ByteArray
+import scodec.Attempt
 import scodec.bits.{BitVector, ByteVector}
 import slick.jdbc.PostgresProfile
 import slick.jdbc.PostgresProfile.api._
 
 
 class HostedChannelsDb(db: PostgresProfile.backend.Database) {
-  private def decode(data: ByteArray) = HC_DATA_ESTABLISHED_Codec.decode(BitVector view data).require.value
+  private def decode(data: ByteArray) = {
+    val v0res = HC_DATA_ESTABLISHED_Codec_V0.decode(BitVector view data)
+    lazy val v1res = HC_DATA_ESTABLISHED_Codec.decode(BitVector view data)
+    v0res match {
+      case Attempt.Successful(value) => value.value
+      case Attempt.Failure(_) => v1res.require.value
+    }
+  }
 
   def addNewChannel(data: HC_DATA_ESTABLISHED): Boolean = {
     val remoteNodeId = data.commitments.remoteNodeId
