@@ -21,6 +21,7 @@ import fr.acinq.fc.app.Tools.{DuplicateHandler, DuplicateShortId}
 import fr.acinq.fc.app._
 import fr.acinq.fc.app.db.Blocking.{span, timeout}
 import fr.acinq.fc.app.db.HostedChannelsDb
+import fr.acinq.fc.app.network.HostedSync.SyncFromPHCPeers
 import fr.acinq.fc.app.network.{HostedSync, OperationalData, PHC, PreimageBroadcastCatcher}
 import fr.acinq.fc.app.rate.{CentralBankOracle, RateOracle}
 import scodec.bits.ByteVector
@@ -42,6 +43,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
   lazy val shortChannelId: ShortChannelId = Tools.hostedShortChanId(kit.nodeParams.nodeId.value, remoteNodeId.value, ticker)
 
   startTimerWithFixedDelay("SendAnnouncements", HostedChannel.SendAnnouncements(force = false), PHC.tickAnnounceThreshold)
+  startTimerWithFixedDelay("SendRates", QueryCurrentRate, 1.minutes)
 
   context.system.eventStream.subscribe(channel = classOf[PreimageBroadcastCatcher.BroadcastedPreimage], subscriber = self)
   context.system.eventStream.subscribe(channel = classOf[HostedSync.RouterIsOperational], subscriber = self)
