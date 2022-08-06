@@ -50,7 +50,7 @@ object RateOracle {
 }
 
 class RateOracle(kit: eclair.Kit, db: RatesDb, sources: Map[Ticker, RateSource]) extends Actor with Logging { me =>
-  context.system.scheduler.scheduleWithFixedDelay(15.seconds, 15.seconds, self, RateOracle.TickUpdateRate)
+  context.system.scheduler.scheduleWithFixedDelay(100.millis, 15.seconds, self, RateOracle.TickUpdateRate)
   fillFromDb()
 
   def fillFromDb(): Unit = {
