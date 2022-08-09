@@ -3,6 +3,7 @@ package fr.acinq.fc.app
 import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey}
 import fr.acinq.bitcoin.{ByteVector32, ByteVector64, Crypto, Protocol, Satoshi}
 import fr.acinq.eclair._
+import fr.acinq.eclair.payment.PaymentRequest
 import fr.acinq.eclair.wire.protocol.{Color, LightningMessageCodecs, UpdateAddHtlc}
 import scodec.bits.ByteVector
 
@@ -123,3 +124,7 @@ case class ReplyPreimages(preimages: List[ByteVector32] = Nil) extends HostedCha
 case class QueryCurrentRate() extends HostedChannelMessage
 
 case class ReplyCurrentRate(rate: MilliSatoshi) extends HostedChannelMessage
+
+// Propose invoice
+
+case class ProposeInvoice(description: String, invoice: PaymentRequest) extends HostedChannelMessage

@@ -1,5 +1,6 @@
 package fr.acinq.eclair.wire.internal.channel.version3
 
+import fr.acinq.eclair.payment.PaymentRequest
 import fr.acinq.eclair.wire.protocol.CommonCodecs._
 import fr.acinq.eclair.wire.protocol.LightningMessageCodecs._
 import fr.acinq.eclair.wire.protocol._
@@ -16,6 +17,10 @@ object FCProtocolCodecs {
     val tag: Codec[Ticker] = variableSizeBytes(uint16, utf8).narrow(tag => Attempt.fromOption(Ticker.tickerByTag(tag), Err.apply(s"Unknown ticker ${tag}")), _.tag)
     tag withContext "tag"
   }.as[Ticker]
+
+  val paymentRequestCodec = {
+    variableSizeBytes(uint16, utf8).narrow(invoice => Attempt.Successful(PaymentRequest.read(invoice)), invoice => PaymentRequest.write(invoice))
+  }.as[PaymentRequest]
 
   val invokeHostedChannelCodec = {
     (bytes32 withContext "chainHash") ::
@@ -102,6 +107,11 @@ object FCProtocolCodecs {
 
   val replyCurrentRateCodec = (millisatoshi withContext "rate").as[ReplyCurrentRate]
 
+  val proposeInvoiceCodec = {
+    (variableSizeBytes(uint16, utf8) withContext "description") ::
+      (paymentRequestCodec withContext "invoice")
+  }.as[ProposeInvoice]
+
   // HC messages which don't have channel id
 
   def decodeHostedMessage(wrap: UnknownMessage): Attempt[HostedChannelMessage] = {
@@ -124,6 +134,7 @@ object FCProtocolCodecs {
       case HC_REPLY_PREIMAGES_TAG => replyPreimagesCodec.decode(bitVector)
       case HC_QUERY_RATE_TAG => provide(QueryCurrentRate()).decode(bitVector)
       case HC_REPLY_RATE_TAG => replyCurrentRateCodec.decode(bitVector)
+      case HC_PROPOSE_INVOICE_TAG => proposeInvoiceCodec.decode(bitVector)
     }
 
     decodeAttempt.map(_.value)
@@ -146,6 +157,7 @@ object FCProtocolCodecs {
     case msg: ReplyPreimages => UnknownMessage(HC_REPLY_PREIMAGES_TAG, replyPreimagesCodec.encode(msg).require.toByteVector)
     case msg: QueryCurrentRate => UnknownMessage(HC_QUERY_RATE_TAG, provide(QueryCurrentRate()).encode(msg).require.toByteVector)
     case msg: ReplyCurrentRate => UnknownMessage(HC_REPLY_RATE_TAG, replyCurrentRateCodec.encode(msg).require.toByteVector)
+    case msg: ProposeInvoice => UnknownMessage(HC_PROPOSE_INVOICE_TAG, proposeInvoiceCodec.encode(msg).require.toByteVector)
   }
 
   // Normal channel messages which are also used in HC

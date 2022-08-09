@@ -75,6 +75,7 @@ object FC {
 
   final val HC_REPLY_RATE_TAG = 52511
 
+  final val HC_PROPOSE_INVOICE_TAG = 52515
 
   final val HC_UPDATE_ADD_HTLC_TAG = 53505
 
