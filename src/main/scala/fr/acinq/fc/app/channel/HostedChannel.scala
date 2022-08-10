@@ -334,7 +334,6 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
         }
       }
 
-
     case Event(remoteSU: StateUpdate, data: HC_DATA_ESTABLISHED) if remoteSU.localSigOfRemoteLCSS != data.commitments.lastCrossSignedState.remoteSigOfLocal =>
       attemptStateUpdate(remoteSU, data)
 
@@ -345,6 +344,11 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
           log.error("Oracle price is not defined, not sending it to the client yet")
           stay
       }
+
+    case Event(cmd: HC_CMD_PROPOSE_INVOICE, data: HC_DATA_ESTABLISHED) => {
+      val msg = ProposeInvoice(cmd.description, cmd.invoice)
+      stay replying CMDResSuccess(cmd) SendingHosted msg
+    }
   }
 
   when(CLOSED) {

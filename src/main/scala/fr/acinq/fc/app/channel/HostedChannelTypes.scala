@@ -7,7 +7,7 @@ import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey}
 import fr.acinq.bitcoin.{ByteVector32, ByteVector64, Crypto, Satoshi, SatoshiLong}
 import fr.acinq.eclair._
 import fr.acinq.eclair.channel._
-import fr.acinq.eclair.payment.OutgoingPaymentPacket
+import fr.acinq.eclair.payment.{OutgoingPaymentPacket, PaymentRequest}
 import fr.acinq.eclair.transactions.{CommitmentSpec, DirectedHtlc}
 import fr.acinq.eclair.wire.protocol._
 import fr.acinq.fc.app._
@@ -52,6 +52,8 @@ case class HC_CMD_GET_ALL_CHANNELS()
 case class HC_CMD_GET_INFO(remoteNodeId: PublicKey, ticker: Ticker) extends HasRemoteNodeIdHostedCommand
 
 case class HC_CMD_SUSPEND(remoteNodeId: PublicKey, ticker: Ticker) extends HasRemoteNodeIdHostedCommand
+
+case class HC_CMD_PROPOSE_INVOICE(remoteNodeId: PublicKey, ticker: Ticker, description: String, invoice: PaymentRequest) extends HasRemoteNodeIdHostedCommand
 
 sealed trait HCCommandResponse
 

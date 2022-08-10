@@ -14,7 +14,7 @@ import fr.acinq.eclair.api.directives.EclairDirectives
 import fr.acinq.eclair.api.serde.FormParamExtractors._
 import fr.acinq.eclair.blockchain.fee.{FeeratePerByte, FeeratePerKw}
 import fr.acinq.eclair.channel.{OFFLINE, Origin}
-import fr.acinq.eclair.payment.IncomingPaymentPacket
+import fr.acinq.eclair.payment.{IncomingPaymentPacket, PaymentRequest}
 import fr.acinq.eclair.payment.relay.PostRestartHtlcCleaner
 import fr.acinq.eclair.payment.relay.PostRestartHtlcCleaner.IncomingHtlc
 import fr.acinq.eclair.router.Router
@@ -292,9 +292,15 @@ class FC extends Plugin with RouteProvider {
       complete(channelsDb.listHotChannels)
     }
 
+    val proposeInvoice: Route = postRequest("fc-invoicepropose") { implicit t =>
+      formFields(nodeIdFormParam, tickerParam, "description".as[String], "invoice".as[PaymentRequest]) { (remoteNodeId, ticker, description, invoice) =>
+        completeCommand(HC_CMD_PROPOSE_INVOICE(remoteNodeId, ticker, description, invoice))
+      }
+    }
+
     invoke ~ externalFulfill ~ allChannels ~ findByRemoteId ~ overridePropose ~ overrideAccept ~
       makePublic ~ makePrivate ~ resize ~ suspend ~ verifyRemoteState ~ restoreFromRemoteState ~
-      broadcastPreimages ~ hotChannels
+      broadcastPreimages ~ hotChannels ~ proposeInvoice
   }
 }
 
