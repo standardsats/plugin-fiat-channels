@@ -14,7 +14,7 @@ import fr.acinq.eclair.api.directives.EclairDirectives
 import fr.acinq.eclair.api.serde.FormParamExtractors._
 import fr.acinq.eclair.blockchain.fee.{FeeratePerByte, FeeratePerKw}
 import fr.acinq.eclair.channel.{OFFLINE, Origin}
-import fr.acinq.eclair.payment.IncomingPaymentPacket
+import fr.acinq.eclair.payment.{IncomingPaymentPacket, Bolt11Invoice}
 import fr.acinq.eclair.payment.relay.PostRestartHtlcCleaner
 import fr.acinq.eclair.payment.relay.PostRestartHtlcCleaner.IncomingHtlc
 import fr.acinq.eclair.router.Router
@@ -22,18 +22,34 @@ import fr.acinq.eclair.transactions.DirectedHtlc
 import fr.acinq.eclair.wire.internal.channel.version3.FiatChannelCodecs
 import fr.acinq.eclair.wire.protocol.{FailureMessage, UpdateAddHtlc}
 import fr.acinq.fc.app.channel._
-import fr.acinq.fc.app.db.{Blocking, HostedChannelsDb, HostedUpdatesDb, PreimagesDb, RatesDb}
+import fr.acinq.fc.app.db.{
+  Blocking,
+  HostedChannelsDb,
+  HostedUpdatesDb,
+  PreimagesDb,
+  RatesDb
+}
 import fr.acinq.fc.app.FC._
 import fr.acinq.fc.app.Ticker.{EUR_TICKER, USD_TICKER}
-import fr.acinq.fc.app.network.{HostedSync, OperationalData, PHC, PreimageBroadcastCatcher}
-import fr.acinq.fc.app.rate.{BinanceSourceModified, CentralBankOracle, EcbSource, RateOracle, RateSource}
+import fr.acinq.fc.app.network.{
+  HostedSync,
+  OperationalData,
+  PHC,
+  PreimageBroadcastCatcher
+}
+import fr.acinq.fc.app.rate.{
+  BinanceSourceModified,
+  CentralBankOracle,
+  EcbSource,
+  RateOracle,
+  RateSource
+}
 import scodec.bits.ByteVector
 
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.stm._
 import scala.util.Try
-
 
 object FC {
   final val HC_INVOKE_HOSTED_CHANNEL_TAG = 55535
@@ -70,11 +86,9 @@ object FC {
 
   final val PHC_UPDATE_SYNC_TAG = 54507
 
-
   final val HC_QUERY_RATE_TAG = 52513
 
   final val HC_REPLY_RATE_TAG = 52511
-
 
   final val HC_UPDATE_ADD_HTLC_TAG = 53505
 
@@ -88,18 +102,45 @@ object FC {
 
   final val HC_MARGIN_CHANNEL_TAG = 53495
 
+  final val HC_PROPOSE_INVOICE_TAG = 52515
+
   val hostedMessageTags: Set[Int] =
-    Set(HC_INVOKE_HOSTED_CHANNEL_TAG, HC_INIT_HOSTED_CHANNEL_TAG, HC_LAST_CROSS_SIGNED_STATE_TAG, HC_STATE_UPDATE_TAG,
-      HC_STATE_OVERRIDE_TAG, HC_HOSTED_CHANNEL_BRANDING_TAG, HC_ANNOUNCEMENT_SIGNATURE_TAG, HC_RESIZE_CHANNEL_TAG,
-      HC_MARGIN_CHANNEL_TAG, HC_ASK_BRANDING_INFO, HC_QUERY_RATE_TAG, HC_REPLY_RATE_TAG)
+    Set(
+      HC_INVOKE_HOSTED_CHANNEL_TAG,
+      HC_INIT_HOSTED_CHANNEL_TAG,
+      HC_LAST_CROSS_SIGNED_STATE_TAG,
+      HC_STATE_UPDATE_TAG,
+      HC_STATE_OVERRIDE_TAG,
+      HC_HOSTED_CHANNEL_BRANDING_TAG,
+      HC_ANNOUNCEMENT_SIGNATURE_TAG,
+      HC_RESIZE_CHANNEL_TAG,
+      HC_MARGIN_CHANNEL_TAG,
+      HC_ASK_BRANDING_INFO,
+      HC_QUERY_RATE_TAG,
+      HC_REPLY_RATE_TAG,
+      HC_PROPOSE_INVOICE_TAG
+    )
 
-  val preimageQueryTags: Set[Int] = Set(HC_QUERY_PREIMAGES_TAG, HC_REPLY_PREIMAGES_TAG)
+  val preimageQueryTags: Set[Int] =
+    Set(HC_QUERY_PREIMAGES_TAG, HC_REPLY_PREIMAGES_TAG)
 
-  val announceTags: Set[Int] = Set(PHC_ANNOUNCE_GOSSIP_TAG, PHC_ANNOUNCE_SYNC_TAG, PHC_UPDATE_GOSSIP_TAG, PHC_UPDATE_SYNC_TAG)
+  val announceTags: Set[Int] = Set(
+    PHC_ANNOUNCE_GOSSIP_TAG,
+    PHC_ANNOUNCE_SYNC_TAG,
+    PHC_UPDATE_GOSSIP_TAG,
+    PHC_UPDATE_SYNC_TAG
+  )
 
-  val chanIdMessageTags: Set[Int] = Set(HC_UPDATE_ADD_HTLC_TAG, HC_UPDATE_FULFILL_HTLC_TAG, HC_UPDATE_FAIL_HTLC_TAG, HC_UPDATE_FAIL_MALFORMED_HTLC_TAG, HC_ERROR_TAG)
+  val chanIdMessageTags: Set[Int] = Set(
+    HC_UPDATE_ADD_HTLC_TAG,
+    HC_UPDATE_FULFILL_HTLC_TAG,
+    HC_UPDATE_FAIL_HTLC_TAG,
+    HC_UPDATE_FAIL_MALFORMED_HTLC_TAG,
+    HC_ERROR_TAG
+  )
 
-  val remoteNode2Connection: mutable.Map[PublicKey, PeerConnectedWrap] = TMap.empty[PublicKey, PeerConnectedWrap].single
+  val remoteNode2Connection: mutable.Map[PublicKey, PeerConnectedWrap] =
+    TMap.empty[PublicKey, PeerConnectedWrap].single
 }
 
 class FC extends Plugin with RouteProvider {
@@ -122,32 +163,80 @@ class FC extends Plugin with RouteProvider {
 
   override def onKit(eclairKit: Kit): Unit = {
     implicit val coreActorSystem: ActorSystem = eclairKit.system
-    preimageRef = eclairKit.system actorOf Props(classOf[PreimageBroadcastCatcher], new PreimagesDb(config.db), eclairKit, config.vals)
-    syncRef = eclairKit.system actorOf Props(classOf[HostedSync], eclairKit, new HostedUpdatesDb(config.db), config.vals.phcConfig)
+    preimageRef = eclairKit.system actorOf Props(
+      classOf[PreimageBroadcastCatcher],
+      new PreimagesDb(config.db),
+      eclairKit,
+      config.vals
+    )
+    syncRef = eclairKit.system actorOf Props(
+      classOf[HostedSync],
+      eclairKit,
+      new HostedUpdatesDb(config.db),
+      config.vals.phcConfig
+    )
 
     var sources: Map[Ticker, RateSource] = Map.empty
-    sources += USD_TICKER -> (new BinanceSourceModified(x => x, USD_TICKER, "BTCUSDT", implicitly))
-    sources += EUR_TICKER -> (new BinanceSourceModified(x => x, EUR_TICKER, "BTCEUR", implicitly))
-    rateOracleRef = eclairKit.system actorOf Props(classOf[RateOracle], eclairKit, ratesDb, sources)
+    sources += USD_TICKER -> (new BinanceSourceModified(
+      x => x,
+      USD_TICKER,
+      "BTCUSDT",
+      implicitly
+    ))
+    sources += EUR_TICKER -> (new BinanceSourceModified(
+      x => x,
+      EUR_TICKER,
+      "BTCEUR",
+      implicitly
+    ))
+    rateOracleRef = eclairKit.system actorOf Props(
+      classOf[RateOracle],
+      eclairKit,
+      ratesDb,
+      sources
+    )
     //ecbOracleRef = eclairKit.system actorOf Props(classOf[CentralBankOracle], eclairKit, new EcbSource(USD_TICKER, implicitly))
-    workerRef = eclairKit.system actorOf Props(classOf[Worker], eclairKit, syncRef, preimageRef, channelsDb, config)
+    workerRef = eclairKit.system actorOf Props(
+      classOf[Worker],
+      eclairKit,
+      syncRef,
+      preimageRef,
+      channelsDb,
+      config
+    )
 
     kit = eclairKit
   }
 
-  override def params: PluginParams = new CustomFeaturePlugin with CustomCommitmentsPlugin {
+  override def params: PluginParams = new CustomFeaturePlugin
+    with CustomCommitmentsPlugin {
 
-    override def messageTags: Set[Int] = hostedMessageTags ++ preimageQueryTags ++ chanIdMessageTags
+    override def messageTags: Set[Int] =
+      hostedMessageTags ++ preimageQueryTags ++ chanIdMessageTags
 
     override def name: String = "Fiat channels"
 
     override def feature: Feature = FCFeature
 
-    override def getIncomingHtlcs(nodeParams: NodeParams, log: LoggingAdapter): Seq[IncomingHtlc] = {
-      val allHotHtlcs: Seq[DirectedHtlc] = channelsDb.listHotChannels.flatMap(_.commitments.localSpec.htlcs)
-      val decryptEither: UpdateAddHtlc => Either[FailureMessage, IncomingPaymentPacket] = IncomingPaymentPacket.decrypt(_: UpdateAddHtlc, nodeParams.privateKey)(log)
-      val resolvePacket: PartialFunction[Either[FailureMessage, IncomingPaymentPacket], IncomingHtlc] = PostRestartHtlcCleaner.decryptedIncomingHtlcs(nodeParams.db.payments)
-      allHotHtlcs.collect(DirectedHtlc.incoming).map(decryptEither).collect(resolvePacket)
+    override def getIncomingHtlcs(
+        nodeParams: NodeParams,
+        log: LoggingAdapter
+    ): Seq[IncomingHtlc] = {
+      val allHotHtlcs: Seq[DirectedHtlc] =
+        channelsDb.listHotChannels.flatMap(_.commitments.localSpec.htlcs)
+      val decryptEither
+          : UpdateAddHtlc => Either[FailureMessage, IncomingPaymentPacket] =
+        IncomingPaymentPacket.decrypt(_: UpdateAddHtlc, nodeParams.privateKey)(
+          log
+        )
+      val resolvePacket: PartialFunction[
+        Either[FailureMessage, IncomingPaymentPacket],
+        IncomingHtlc
+      ] = PostRestartHtlcCleaner.decryptedIncomingHtlcs(nodeParams.db.payments)
+      allHotHtlcs
+        .collect(DirectedHtlc.incoming)
+        .map(decryptEither)
+        .collect(resolvePacket)
     }
 
     private def htlcsOut = for {
@@ -159,14 +248,22 @@ class FC extends Plugin with RouteProvider {
     type PaymentHashAndHtlcId = (ByteVector32, Long)
     type PaymentLocations = Set[PaymentHashAndHtlcId]
 
-    override def getHtlcsRelayedOut(htlcsIn: Seq[IncomingHtlc], nodeParams: NodeParams, log: LoggingAdapter): Map[Origin, PaymentLocations] =
+    override def getHtlcsRelayedOut(
+        htlcsIn: Seq[IncomingHtlc],
+        nodeParams: NodeParams,
+        log: LoggingAdapter
+    ): Map[Origin, PaymentLocations] =
       PostRestartHtlcCleaner.groupByOrigin(htlcsOut, htlcsIn)
   }
 
   override def route(eclairDirectives: EclairDirectives): Route = {
     import eclairDirectives._
     import fr.acinq.eclair.api.serde.FormParamExtractors._
-    import fr.acinq.eclair.api.serde.JsonSupport.{formats, marshaller, serialization}
+    import fr.acinq.eclair.api.serde.JsonSupport.{
+      formats,
+      marshaller,
+      serialization
+    }
 
     import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -175,42 +272,84 @@ class FC extends Plugin with RouteProvider {
       "ticker".as[Ticker](Unmarshaller.strict { str: String =>
         Ticker
           .tickerByTag(str)
-          .getOrElse(throw new IllegalArgumentException(s"Unknown ticker ${str}"))
+          .getOrElse(
+            throw new IllegalArgumentException(s"Unknown ticker ${str}")
+          )
       })
 
     def getHostedStateResult(state: ByteVector) = {
-      val remoteState = FiatChannelCodecs.hostedStateCodec.decodeValue(state.toBitVector).require
-      val remoteNodeIdOpt = Set(remoteState.nodeId1, remoteState.nodeId2).find(kit.nodeParams.nodeId.!=)
-      val isLocalSigOk = remoteState.lastCrossSignedState.verifyRemoteSig(kit.nodeParams.nodeId)
+      val remoteState = FiatChannelCodecs.hostedStateCodec
+        .decodeValue(state.toBitVector)
+        .require
+      val remoteNodeIdOpt = Set(remoteState.nodeId1, remoteState.nodeId2).find(
+        kit.nodeParams.nodeId.!=
+      )
+      val isLocalSigOk =
+        remoteState.lastCrossSignedState.verifyRemoteSig(kit.nodeParams.nodeId)
       RemoteHostedStateResult(remoteState, remoteNodeIdOpt, isLocalSigOk)
     }
 
-    def completeCommand(cmd: HasRemoteNodeIdHostedCommand)(implicit timeout: Timeout) = {
+    def completeCommand(
+        cmd: HasRemoteNodeIdHostedCommand
+    )(implicit timeout: Timeout) = {
       val futureResponse = (workerRef ? cmd).mapTo[HCCommandResponse]
       complete(futureResponse)
     }
 
     val invoke: Route = postRequest("fc-invoke") { implicit t =>
-      formFields("refundAddress", "secret".as[ByteVector](binaryDataUnmarshaller), nodeIdFormParam, tickerParam) { case (refundAddress, secret, remoteNodeId, ticker) =>
-        val refundPubkeyScript = Script.write(fr.acinq.eclair.addressToPublicKeyScript(refundAddress, kit.nodeParams.chainHash))
-        completeCommand(HC_CMD_LOCAL_INVOKE(remoteNodeId, ticker, refundPubkeyScript, secret))
+      formFields(
+        "refundAddress",
+        "secret".as[ByteVector](binaryDataUnmarshaller),
+        nodeIdFormParam,
+        tickerParam
+      ) { case (refundAddress, secret, remoteNodeId, ticker) =>
+        val refundPubkeyScript = Script.write(
+          fr.acinq.eclair
+            .addressToPublicKeyScript(refundAddress, kit.nodeParams.chainHash)
+        )
+        completeCommand(
+          HC_CMD_LOCAL_INVOKE(remoteNodeId, ticker, refundPubkeyScript, secret)
+        )
       }
     }
 
-    val externalFulfill: Route = postRequest("fc-externalfulfill") { implicit t =>
-      formFields("htlcId".as[Long], "paymentPreimage".as[ByteVector32], nodeIdFormParam, tickerParam) { case (htlcId, paymentPreimage, remoteNodeId, ticker) =>
-        completeCommand(HC_CMD_EXTERNAL_FULFILL(remoteNodeId, ticker, htlcId, paymentPreimage))
-      }
+    val externalFulfill: Route = postRequest("fc-externalfulfill") {
+      implicit t =>
+        formFields(
+          "htlcId".as[Long],
+          "paymentPreimage".as[ByteVector32],
+          nodeIdFormParam,
+          tickerParam
+        ) { case (htlcId, paymentPreimage, remoteNodeId, ticker) =>
+          completeCommand(
+            HC_CMD_EXTERNAL_FULFILL(
+              remoteNodeId,
+              ticker,
+              htlcId,
+              paymentPreimage
+            )
+          )
+        }
     }
 
     val allChannels: Route = postRequest("fc-all") { implicit t =>
       val allChannelsFuture = for {
-        onlineChannels <- (workerRef ? HC_CMD_GET_ALL_CHANNELS()).mapTo[HCCommandResponse]
+        onlineChannels <- (workerRef ? HC_CMD_GET_ALL_CHANNELS())
+          .mapTo[HCCommandResponse]
         dbChannels = channelsDb.listAllChannels
         collectedChannels = onlineChannels match {
           case CMDAllInfo(channels) =>
-            val offlineChannels = dbChannels.filter(data => !channels.contains(data.commitments.remoteNodeId.toString()))
-            val offlineMap = Map.from(offlineChannels.map(data => (data.commitments.remoteNodeId.toString(), CMDResInfo(OFFLINE, data, data.commitments.localSpec))))
+            val offlineChannels = dbChannels.filter(data =>
+              !channels.contains(data.commitments.remoteNodeId.toString())
+            )
+            val offlineMap = Map.from(
+              offlineChannels.map(data =>
+                (
+                  data.commitments.remoteNodeId.toString(),
+                  CMDResInfo(OFFLINE, data, data.commitments.localSpec)
+                )
+              )
+            )
             CMDAllInfo(channels ++ offlineMap)
           case x => x
         }
@@ -224,10 +363,17 @@ class FC extends Plugin with RouteProvider {
       }
     }
 
-    val overridePropose: Route = postRequest("fc-overridepropose") { implicit t =>
-      formFields("newLocalBalanceMsat".as[MilliSatoshi], nodeIdFormParam, tickerParam) { case (newLocalBalance, remoteNodeId, ticker) =>
-        completeCommand(HC_CMD_OVERRIDE_PROPOSE(remoteNodeId, ticker, newLocalBalance))
-      }
+    val overridePropose: Route = postRequest("fc-overridepropose") {
+      implicit t =>
+        formFields(
+          "newLocalBalanceMsat".as[MilliSatoshi],
+          nodeIdFormParam,
+          tickerParam
+        ) { case (newLocalBalance, remoteNodeId, ticker) =>
+          completeCommand(
+            HC_CMD_OVERRIDE_PROPOSE(remoteNodeId, ticker, newLocalBalance)
+          )
+        }
     }
 
     val overrideAccept: Route = postRequest("fc-overrideaccept") { implicit t =>
@@ -249,14 +395,22 @@ class FC extends Plugin with RouteProvider {
     }
 
     val resize: Route = postRequest("fc-resize") { implicit t =>
-      formFields("newCapacitySat".as[Satoshi], nodeIdFormParam, tickerParam) { case (newCapacity, remoteNodeId, ticker) =>
-        completeCommand(HC_CMD_RESIZE(remoteNodeId, ticker, newCapacity))
+      formFields("newCapacitySat".as[Satoshi], nodeIdFormParam, tickerParam) {
+        case (newCapacity, remoteNodeId, ticker) =>
+          completeCommand(HC_CMD_RESIZE(remoteNodeId, ticker, newCapacity))
       }
     }
 
     val margin: Route = postRequest("fc-margin") { implicit t =>
-      formFields("newCapacitySat".as[Satoshi], "newRate".as[MilliSatoshi], nodeIdFormParam, tickerParam) { case (newCapacity, newRate, remoteNodeId, ticker) =>
-        completeCommand(HC_CMD_MARGIN(remoteNodeId, ticker, newCapacity, newRate))
+      formFields(
+        "newCapacitySat".as[Satoshi],
+        "newRate".as[MilliSatoshi],
+        nodeIdFormParam,
+        tickerParam
+      ) { case (newCapacity, newRate, remoteNodeId, ticker) =>
+        completeCommand(
+          HC_CMD_MARGIN(remoteNodeId, ticker, newCapacity, newRate)
+        )
       }
     }
 
@@ -266,36 +420,74 @@ class FC extends Plugin with RouteProvider {
       }
     }
 
-    val verifyRemoteState: Route = postRequest("fc-verifyremotestate") { implicit t =>
-      formFields(hostedStateUnmarshaller) { state =>
-        complete(getHostedStateResult(state))
-      }
+    val verifyRemoteState: Route = postRequest("fc-verifyremotestate") {
+      implicit t =>
+        formFields(hostedStateUnmarshaller) { state =>
+          complete(getHostedStateResult(state))
+        }
     }
 
-    val restoreFromRemoteState: Route = postRequest("fc-restorefromremotestate") { implicit t =>
-      formFields(hostedStateUnmarshaller) { state =>
-        val RemoteHostedStateResult(remoteState, Some(remoteNodeId), isLocalSigOk) = getHostedStateResult(state)
-        require(isLocalSigOk, "Can't proceed: local signature of provided HC state is invalid")
-        completeCommand(HC_CMD_RESTORE(remoteNodeId, remoteState.lastCrossSignedState.initHostedChannel.ticker, remoteState))
+    val restoreFromRemoteState: Route =
+      postRequest("fc-restorefromremotestate") { implicit t =>
+        formFields(hostedStateUnmarshaller) { state =>
+          val RemoteHostedStateResult(
+            remoteState,
+            Some(remoteNodeId),
+            isLocalSigOk
+          ) = getHostedStateResult(state)
+          require(
+            isLocalSigOk,
+            "Can't proceed: local signature of provided HC state is invalid"
+          )
+          completeCommand(
+            HC_CMD_RESTORE(
+              remoteNodeId,
+              remoteState.lastCrossSignedState.initHostedChannel.ticker,
+              remoteState
+            )
+          )
+        }
       }
-    }
 
-    val broadcastPreimages: Route = postRequest("fc-broadcastpreimages") { implicit t =>
-      formFields("preimages".as[List[ByteVector32]], "feerateSatByte".as[FeeratePerByte]) { case (preimages, feerateSatByte) =>
-        require(feerateSatByte.feerate.toLong > 1, "Preimage broadcast funding feerate must be higher than 1 sat/byte")
-        val cmd = PreimageBroadcastCatcher.SendPreimageBroadcast(FeeratePerKw(feerateSatByte), preimages.toSet)
-        val broadcastTxIdResult = (preimageRef ? cmd).mapTo[ByteVector32]
-        complete(broadcastTxIdResult)
-      }
+    val broadcastPreimages: Route = postRequest("fc-broadcastpreimages") {
+      implicit t =>
+        formFields(
+          "preimages".as[List[ByteVector32]],
+          "feerateSatByte".as[FeeratePerByte]
+        ) { case (preimages, feerateSatByte) =>
+          require(
+            feerateSatByte.feerate.toLong > 1,
+            "Preimage broadcast funding feerate must be higher than 1 sat/byte"
+          )
+          val cmd = PreimageBroadcastCatcher.SendPreimageBroadcast(
+            FeeratePerKw(feerateSatByte),
+            preimages.toSet
+          )
+          val broadcastTxIdResult = (preimageRef ? cmd).mapTo[ByteVector32]
+          complete(broadcastTxIdResult)
+        }
     }
 
     val hotChannels: Route = postRequest("fc-hot") { implicit t =>
       complete(channelsDb.listHotChannels)
     }
 
+    val proposeInvoice: Route = postRequest("fc-invoicepropose") { implicit t =>
+      formFields(
+        nodeIdFormParam,
+        tickerParam,
+        "description".as[String],
+        "invoice".as[Bolt11Invoice]
+      ) { (remoteNodeId, ticker, description, invoice) =>
+        completeCommand(
+          HC_CMD_PROPOSE_INVOICE(remoteNodeId, ticker, description, invoice)
+        )
+      }
+    }
+
     invoke ~ externalFulfill ~ allChannels ~ findByRemoteId ~ overridePropose ~ overrideAccept ~
       resize ~ suspend ~ verifyRemoteState ~ restoreFromRemoteState ~
-      broadcastPreimages ~ hotChannels
+      broadcastPreimages ~ hotChannels ~ proposeInvoice
   }
 }
 
@@ -305,24 +497,44 @@ case object FCFeature extends Feature with InitFeature with NodeFeature {
   lazy val mandatory = 52972
 }
 
-case object ResizeableFCFeature extends Feature with InitFeature with NodeFeature {
+case object ResizeableFCFeature
+    extends Feature
+    with InitFeature
+    with NodeFeature {
   val plugin: UnknownFeature = UnknownFeature(optional)
   val rfcName = "resizeable_hosted_channels"
   lazy val mandatory = 52974
 }
 
 // Depends on https://github.com/engenegr/eclair-alarmbot-plugin
-case class AlmostTimedoutIncomingHtlc(add: wire.protocol.UpdateAddHtlc, fulfill: wire.protocol.UpdateFulfillHtlc, nodeId: PublicKey, blockHeight: Long) extends fr.acinq.alarmbot.CustomAlarmBotMessage {
-  override def message: String = s"AlmostTimedoutIncomingHtlc, id=${add.id}, amount=${add.amountMsat}, hash=${add.paymentHash}, expiry=${add.cltvExpiry.toLong}, tip=$blockHeight, preimage=${fulfill.paymentPreimage}, peer=$nodeId"
+case class AlmostTimedoutIncomingHtlc(
+    add: wire.protocol.UpdateAddHtlc,
+    fulfill: wire.protocol.UpdateFulfillHtlc,
+    nodeId: PublicKey,
+    blockHeight: Long
+) extends fr.acinq.alarmbot.CustomAlarmBotMessage {
+  override def message: String =
+    s"AlmostTimedoutIncomingHtlc, id=${add.id}, amount=${add.amountMsat}, hash=${add.paymentHash}, expiry=${add.cltvExpiry.toLong}, tip=$blockHeight, preimage=${fulfill.paymentPreimage}, peer=$nodeId"
   override def senderEntity: String = "FC"
 }
 
-case class FCSuspended(nodeId: PublicKey, isHost: Boolean, isLocal: Boolean, description: String) extends fr.acinq.alarmbot.CustomAlarmBotMessage {
-  override def message: String = s"FCSuspended, isHost=$isHost, isLocal=$isLocal, peer=$nodeId, description=$description"
+case class FCSuspended(
+    nodeId: PublicKey,
+    isHost: Boolean,
+    isLocal: Boolean,
+    description: String
+) extends fr.acinq.alarmbot.CustomAlarmBotMessage {
+  override def message: String =
+    s"FCSuspended, isHost=$isHost, isLocal=$isLocal, peer=$nodeId, description=$description"
   override def senderEntity: String = "FC"
 }
 
-case class FCHedgeLiability(channel: String, tickerStr: String, amount: MilliSatoshi, rate: MilliSatoshi) extends fr.acinq.alarmbot.ExternalHedgeMessage {
+case class FCHedgeLiability(
+    channel: String,
+    tickerStr: String,
+    amount: MilliSatoshi,
+    rate: MilliSatoshi
+) extends fr.acinq.alarmbot.ExternalHedgeMessage {
   override def senderEntity: String = "FC"
   override def ticker: String = tickerStr
 }
