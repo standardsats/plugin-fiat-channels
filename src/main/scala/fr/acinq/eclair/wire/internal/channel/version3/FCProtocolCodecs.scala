@@ -25,10 +25,11 @@ object FCProtocolCodecs {
   }.as[Ticker]
 
   val paymentRequestCodec = {
-    variableSizeBytes(uint16, utf8).narrow(
-      invoice => Attempt.Successful(Bolt11Invoice.fromString(invoice)),
-      invoice => invoice.toString
+    val invoice: Codec[Bolt11Invoice] = variableSizeBytes(uint16, utf8).narrow(
+      invoice => Attempt.fromTry(Bolt11Invoice.fromString(invoice)),
+      (invoice: Bolt11Invoice) => invoice.toString
     )
+    invoice withContext "invoice"
   }.as[Bolt11Invoice]
 
   val invokeHostedChannelCodec = {
@@ -133,7 +134,7 @@ object FCProtocolCodecs {
   val proposeInvoiceCodec = {
     (variableSizeBytes(uint16, utf8) withContext "description") ::
       (paymentRequestCodec withContext "invoice")
-  }.as[Bolt11Invoice]
+  }.as[ProposeInvoice]
 
   // HC messages which don't have channel id
 
@@ -254,7 +255,11 @@ object FCProtocolCodecs {
           HC_REPLY_RATE_TAG,
           replyCurrentRateCodec.encode(msg).require.toByteVector
         )
-      case HC_PROPOSE_INVOICE_TAG => proposeInvoiceCodec.decode(bitVector)
+      case msg: ProposeInvoice =>
+        UnknownMessage(
+          HC_PROPOSE_INVOICE_TAG,
+          proposeInvoiceCodec.encode(msg).require.toByteVector
+        )
     }
 
   // Normal channel messages which are also used in HC
