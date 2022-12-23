@@ -271,7 +271,7 @@ class FC extends Plugin with RouteProvider {
     val tickerParam: NameUnmarshallerReceptacle[Ticker] =
       "ticker".as[Ticker](Unmarshaller.strict { str: String =>
         Ticker
-          .tickerByTag(str)
+          .tickerByTag(str.toUpperCase)
           .getOrElse(
             throw new IllegalArgumentException(s"Unknown ticker ${str}")
           )
