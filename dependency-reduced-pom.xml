@@ -86,7 +86,7 @@
     <dependency>
       <groupId>fr.acinq.eclair</groupId>
       <artifactId>eclair-core_2.13</artifactId>
-      <version>0.7.0</version>
+      <version>0.7.0-patch-disconnect</version>
       <scope>provided</scope>
       <exclusions>
         <exclusion>
@@ -186,7 +186,7 @@
     <dependency>
       <groupId>fr.acinq.eclair</groupId>
       <artifactId>eclair-node_2.13</artifactId>
-      <version>0.7.0</version>
+      <version>0.7.0-patch-disconnect</version>
       <scope>provided</scope>
       <exclusions>
         <exclusion>
@@ -226,7 +226,7 @@
     <dependency>
       <groupId>fr.acinq.alarmbot</groupId>
       <artifactId>eclair-alarmbot_2.13</artifactId>
-      <version>0.7.0</version>
+      <version>0.7.0-patch-disconnect</version>
       <scope>provided</scope>
     </dependency>
     <dependency>
@@ -276,7 +276,7 @@
     <dependency>
       <groupId>fr.acinq.eclair</groupId>
       <artifactId>eclair-core_2.13</artifactId>
-      <version>0.7.0</version>
+      <version>0.7.0-patch-disconnect</version>
       <type>test-jar</type>
       <classifier>tests</classifier>
       <scope>test</scope>
@@ -382,6 +382,6 @@
     <maven.compiler.source>11</maven.compiler.source>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <scala.version>2.13.6</scala.version>
-    <eclair.version>0.7.0</eclair.version>
+    <eclair.version>0.7.0-patch-disconnect</eclair.version>
   </properties>
 </project>
