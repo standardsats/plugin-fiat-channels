@@ -20,25 +20,25 @@ class FCResizeSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike with FCS
     HCTestUtils.resetEntireDatabase(aliceDB)
     HCTestUtils.resetEntireDatabase(bobDB)
     reachNormal(f)
-    awaitCond(alice.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.capacity == 10000000L.sat)
-    awaitCond(bob.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.localSpec.toLocal == 0L.msat)
-    bob ! HC_CMD_RESIZE(bobKit.nodeParams.nodeId, USD_TICKER, 50000000L.sat)
+    awaitCond(alice.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.capacity == Satoshi(10000000))
+    awaitCond(bob.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.localSpec.toLocal == MilliSatoshi(0))
+    bob ! HC_CMD_RESIZE(bobKit.nodeParams.nodeId, USD_TICKER, Satoshi(50000000))
     alice ! bob2alice.expectMsgType[ResizeChannel]
     alice ! bob2alice.expectMsgType[StateUpdate]
     bob ! alice2bob.expectMsgType[StateUpdate]
     alice ! bob2alice.expectMsgType[StateUpdate]
     alice2bob.expectNoMessage()
     bob2alice.expectNoMessage()
-    awaitCond(alice.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.capacity == 50000000L.sat)
-    awaitCond(bob.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.capacity == 50000000L.sat)
-    val (preimage1, alice2bobUpdateAdd1) = addHtlcFromAliceToBob(9000000000L.msat, f, currentBlockHeight)
-    val (preimage2, alice2bobUpdateAdd2) = addHtlcFromAliceToBob(9000000000L.msat, f, currentBlockHeight)
+    awaitCond(alice.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.capacity == Satoshi(50000000))
+    awaitCond(bob.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.capacity == Satoshi(50000000))
+    val (preimage1, alice2bobUpdateAdd1) = addHtlcFromAliceToBob(Satoshi(MilliSatoshi(9000000000), f, currentBlockHeight)
+    val (preimage2, alice2bobUpdateAdd2) = addHtlcFromAliceToBob(MilliSatoshi(9000000000), f, currentBlockHeight)
     fulfillAliceHtlcByBob(alice2bobUpdateAdd1.id, preimage1, f)
     fulfillAliceHtlcByBob(alice2bobUpdateAdd2.id, preimage2, f)
     awaitCond(alice.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.originChannels.isEmpty)
     awaitCond(bob.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.originChannels.isEmpty)
-    awaitCond(alice.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.localSpec.toLocal == 32000000000L.msat)
-    awaitCond(bob.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.localSpec.toLocal == 18000000000L.msat)
+    awaitCond(alice.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.localSpec.toLocal == MilliSatoshi(32000000000))
+    awaitCond(bob.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.localSpec.toLocal == MilliSatoshi(18000000000))
   }
 
   test("Resize with HTLCs in-flight") { f =>
@@ -46,13 +46,13 @@ class FCResizeSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike with FCS
     HCTestUtils.resetEntireDatabase(aliceDB)
     HCTestUtils.resetEntireDatabase(bobDB)
     reachNormal(f)
-    val (preimage0, alice2bobUpdateAdd0) = addHtlcFromAliceToBob(5000000000L.msat, f, currentBlockHeight)
+    val (preimage0, alice2bobUpdateAdd0) = addHtlcFromAliceToBob(MilliSatoshi(5000000000), f, currentBlockHeight)
     fulfillAliceHtlcByBob(alice2bobUpdateAdd0.id, preimage0, f) // To give Bob some money
-    val (preimage1, alice2bobUpdateAdd1) = addHtlcFromAliceToBob(2000000000L.msat, f, currentBlockHeight)
-    val (preimage2, bob2aliceUpdateAdd2) = addHtlcFromBob2Alice(2000000000L.msat, f)
+    val (preimage1, alice2bobUpdateAdd1) = addHtlcFromAliceToBob(MilliSatoshi(2000000000), f, currentBlockHeight)
+    val (preimage2, bob2aliceUpdateAdd2) = addHtlcFromBob2Alice(MilliSatoshi(2000000000), f)
     alice ! CMD_FULFILL_HTLC(bob2aliceUpdateAdd2.id, preimage2)
     alice ! CMD_SIGN(None)
-    bob ! HC_CMD_RESIZE(bobKit.nodeParams.nodeId, USD_TICKER, 20000000L.sat)
+    bob ! HC_CMD_RESIZE(bobKit.nodeParams.nodeId, USD_TICKER, Satoshi(20000000))
     alice ! bob2alice.expectMsgType[ResizeChannel]
     alice ! bob2alice.expectMsgType[StateUpdate]
     bob ! alice2bob.expectMsgType[UpdateFulfillHtlc]
@@ -73,10 +73,10 @@ class FCResizeSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike with FCS
     awaitCond(bob.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.originChannels.isEmpty)
     awaitCond(alice.stateName == NORMAL)
     awaitCond(bob.stateName == NORMAL)
-    awaitCond(alice.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.localSpec.toLocal == 15000000000L.msat)
-    awaitCond(bob.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.localSpec.toLocal == 5000000000L.msat)
+    awaitCond(alice.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.localSpec.toLocal == MilliSatoshi(15000000000))
+    awaitCond(bob.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.localSpec.toLocal == MilliSatoshi(5000000000))
     bobRelayer.expectMsgType[RES_ADD_SETTLED[_, _]]
-    val (preimage3, alice2bobUpdateAdd3) = addHtlcFromAliceToBob(1000000000L.msat, f, currentBlockHeight)
+    val (preimage3, alice2bobUpdateAdd3) = addHtlcFromAliceToBob(MilliSatoshi(1000000000), f, currentBlockHeight)
     fulfillAliceHtlcByBob(alice2bobUpdateAdd3.id, preimage3, f)
   }
 
@@ -85,8 +85,8 @@ class FCResizeSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike with FCS
     HCTestUtils.resetEntireDatabase(aliceDB)
     HCTestUtils.resetEntireDatabase(bobDB)
     reachNormal(f)
-    val (preimage0, alice2bobUpdateAdd0) = addHtlcFromAliceToBob(5000000000L.msat, f, currentBlockHeight)
-    bob ! HC_CMD_RESIZE(bobKit.nodeParams.nodeId, USD_TICKER, 20000000L.sat)
+    val (preimage0, alice2bobUpdateAdd0) = addHtlcFromAliceToBob(MilliSatoshi(5000000000), f, currentBlockHeight)
+    bob ! HC_CMD_RESIZE(bobKit.nodeParams.nodeId, USD_TICKER, Satoshi(20000000))
     bob2alice.expectMsgType[ResizeChannel] // Alice does not get it
     bob2alice.expectMsgType[StateUpdate]
 
@@ -110,8 +110,8 @@ class FCResizeSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike with FCS
     bob2alice.expectNoMessage()
     alice2bob.expectNoMessage()
     fulfillAliceHtlcByBob(alice2bobUpdateAdd0.id, preimage0, f)
-    awaitCond(alice.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.localSpec.toLocal == 15000000000L.msat)
-    awaitCond(bob.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.localSpec.toLocal == 5000000000L.msat)
+    awaitCond(alice.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.localSpec.toLocal == MilliSatoshi(15000000000))
+    awaitCond(bob.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.localSpec.toLocal == MilliSatoshi(5000000000))
   }
 
   test("Host applies resize proposal before restart") { f =>
@@ -119,8 +119,8 @@ class FCResizeSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike with FCS
     HCTestUtils.resetEntireDatabase(aliceDB)
     HCTestUtils.resetEntireDatabase(bobDB)
     reachNormal(f)
-    val (preimage0, alice2bobUpdateAdd0) = addHtlcFromAliceToBob(5000000000L.msat, f, currentBlockHeight)
-    bob ! HC_CMD_RESIZE(bobKit.nodeParams.nodeId, USD_TICKER, 20000000L.sat)
+    val (preimage0, alice2bobUpdateAdd0) = addHtlcFromAliceToBob(MilliSatoshi(5000000000), f, currentBlockHeight)
+    bob ! HC_CMD_RESIZE(bobKit.nodeParams.nodeId, USD_TICKER, Satoshi(20000000))
     alice ! bob2alice.expectMsgType[ResizeChannel]
     alice ! bob2alice.expectMsgType[StateUpdate]
     alice2bob.expectMsgType[StateUpdate] // Bob does not get it
@@ -143,8 +143,8 @@ class FCResizeSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike with FCS
     bob2alice.expectNoMessage()
     alice2bob.expectNoMessage()
     fulfillAliceHtlcByBob(alice2bobUpdateAdd0.id, preimage0, f)
-    awaitCond(alice.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.localSpec.toLocal == 15000000000L.msat)
-    awaitCond(bob.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.localSpec.toLocal == 5000000000L.msat)
+    awaitCond(alice.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.localSpec.toLocal == MilliSatoshi(15000000000))
+    awaitCond(bob.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.localSpec.toLocal == MilliSatoshi(5000000000))
   }
 
   test("Host gets resize without update, intertwined with add") { f =>
@@ -152,7 +152,7 @@ class FCResizeSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike with FCS
     HCTestUtils.resetEntireDatabase(aliceDB)
     HCTestUtils.resetEntireDatabase(bobDB)
     reachNormal(f)
-    bob ! HC_CMD_RESIZE(bobKit.nodeParams.nodeId, USD_TICKER, 20000000L.sat)
+    bob ! HC_CMD_RESIZE(bobKit.nodeParams.nodeId, USD_TICKER, Satoshi(20000000))
     alice ! bob2alice.expectMsgType[ResizeChannel]
     bob2alice.expectMsgType[StateUpdate] // Alice does not get it
     bob2alice.expectNoMessage()
@@ -170,7 +170,7 @@ class FCResizeSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike with FCS
     alice ! bob2alice.expectMsgType[LastCrossSignedState]
     alice ! bob2alice.expectMsgType[ResizeChannel]
     bob ! alice2bob.expectMsgType[LastCrossSignedState]
-    val (preimage, cmd_add, _) = makeCmdAdd(100000L.msat, bobKit.nodeParams.nodeId, currentBlockHeight)
+    val (preimage, cmd_add, _) = makeCmdAdd(MilliSatoshi(100000), bobKit.nodeParams.nodeId, currentBlockHeight)
     alice ! cmd_add
     alice ! CMD_SIGN(None)
 
@@ -200,8 +200,8 @@ class FCResizeSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike with FCS
     HCTestUtils.resetEntireDatabase(aliceDB)
     HCTestUtils.resetEntireDatabase(bobDB)
     reachNormal(f)
-    val (preimage0, alice2bobUpdateAdd0) = addHtlcFromAliceToBob(5000000000L.msat, f, currentBlockHeight)
-    bob ! HC_CMD_RESIZE(bobKit.nodeParams.nodeId, USD_TICKER, 20000000L.sat)
+    val (preimage0, alice2bobUpdateAdd0) = addHtlcFromAliceToBob(MilliSatoshi(5000000000), f, currentBlockHeight)
+    bob ! HC_CMD_RESIZE(bobKit.nodeParams.nodeId, USD_TICKER, Satoshi(20000000))
     alice ! bob2alice.expectMsgType[ResizeChannel]
     bob2alice.expectMsgType[StateUpdate] // Alice does not get it
     bob2alice.expectNoMessage()
@@ -237,7 +237,7 @@ class FCResizeSpec extends TestKitBaseClass with FixtureAnyFunSuiteLike with FCS
     alice2bob.expectNoMessage()
     awaitCond(alice.stateName == NORMAL)
     awaitCond(bob.stateName == NORMAL)
-    awaitCond(alice.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.localSpec.toLocal == 15000000000L.msat)
-    awaitCond(bob.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.localSpec.toLocal == 5000000000L.msat)
+    awaitCond(alice.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.localSpec.toLocal == MilliSatoshi(15000000000))
+    awaitCond(bob.stateData.asInstanceOf[HC_DATA_ESTABLISHED].commitments.localSpec.toLocal == MilliSatoshi(5000000000))
   }
 }

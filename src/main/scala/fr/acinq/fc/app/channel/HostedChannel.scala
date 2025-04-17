@@ -532,6 +532,8 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
           context.system.eventStream publish HostedChannelRestored(self, channelId, connection.info.peer, remoteNodeId)
           context.system.eventStream publish ChannelIdAssigned(self, remoteNodeId, temporaryChannelId = ByteVector32.Zeroes, channelId)
           context.system.eventStream publish ShortChannelIdAssigned(self, channelId, shortChannelId, previousShortChannelId = None)
+          //context.system.eventStream publish ShortChannelIdAssigned(self, channelId, None, aliases, remoteNodeId)
+
           context.system.eventStream publish makeLocalUpdateEvent(d1.channelUpdate, d1.commitments)
 
         case (_, NORMAL, OFFLINE | CLOSED, _) =>
@@ -648,7 +650,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
 
   def restoreEmptyData(localLCSS: LastCrossSignedState): HC_DATA_ESTABLISHED =
     HC_DATA_ESTABLISHED(HostedCommitments(localNodeId = kit.nodeParams.nodeId, remoteNodeId, channelId,
-      CommitmentSpec(htlcs = Set.empty, FeeratePerKw(0L.sat), localLCSS.localBalanceMsat, localLCSS.remoteBalanceMsat), originChannels = Map.empty,
+      CommitmentSpec(htlcs = Set.empty, FeeratePerKw(Satoshi(0)), localLCSS.localBalanceMsat, localLCSS.remoteBalanceMsat), originChannels = Map.empty,
       localLCSS, nextLocalUpdates = Nil, nextRemoteUpdates = Nil, announceChannel = false), makeChannelUpdate(localLCSS, enable = true), localErrors = Nil,
       lastAvgRate = Set.empty)
 

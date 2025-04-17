@@ -10,18 +10,13 @@ import fr.acinq.eclair.router.Announcements
 import fr.acinq.eclair.wire.internal.channel.version3.FCProtocolCodecs
 import fr.acinq.eclair.wire.protocol._
 import fr.acinq.fc.app.channel.HostedCommitments
-import net.ceedubs.ficus.Ficus._
-import net.ceedubs.ficus.readers.ArbitraryTypeReader._
-import net.ceedubs.ficus.readers.ValueReader
 import org.postgresql.util.PSQLException
-import scodec.bits.ByteVector
-import slick.jdbc.PostgresProfile
 
 import java.io.{ByteArrayInputStream, File}
 import java.nio.ByteOrder
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
-import scala.util.Try
+import java.security.CryptoPrimitive
 
 
 object Tools {
@@ -43,7 +38,7 @@ object Tools {
     AnnouncementSignature(nodeParams.nodeKeyManager.signChannelAnnouncement(witness), wantsReply)
   }
 
-  def makePHCAnnouncement(nodeParams: NodeParams, ls: AnnouncementSignature, rs: AnnouncementSignature, shortChannelId: ShortChannelId, remoteNodeId: PublicKey): ChannelAnnouncement =
+  def makePHCAnnouncement(nodeParams: NodeParams, ls: AnnouncementSignature, rs: AnnouncementSignature, shortChannelId: ShortChannelId, remoteNodeId: Crypto.PublicKey): ChannelAnnouncement =
     Announcements.makeChannelAnnouncement(nodeParams.chainHash, shortChannelId, nodeParams.nodeId, remoteNodeId, nodeParams.nodeId, remoteNodeId, ls.nodeSignature, rs.nodeSignature, ls.nodeSignature, rs.nodeSignature)
 
   // HC ids derivation

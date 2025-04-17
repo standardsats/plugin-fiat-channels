@@ -6,7 +6,7 @@ import com.softwaremill.quicklens._
 import fr.acinq.bitcoin.scalacompat.Crypto.{PrivateKey, PublicKey}
 import fr.acinq.bitcoin.scalacompat.{ByteVector32, ByteVector64, Crypto}
 import fr.acinq.bitcoin.scalacompat.Satoshi
-import fr.acinq.eclair.MilliSatoshiConversions._
+import fr.acinq.eclair.ToMilliSatoshiConversion
 import fr.acinq.eclair._
 import fr.acinq.eclair.channel._
 import fr.acinq.eclair.payment.{OutgoingPaymentPacket, Bolt11Invoice}
@@ -15,6 +15,7 @@ import fr.acinq.eclair.wire.protocol._
 import fr.acinq.fc.app._
 import fr.acinq.fc.app.network.PHC
 import scodec.bits.ByteVector
+import fr.acinq.eclair.channel.Commitments
 
 import scala.concurrent.duration._
 import scala.language.postfixOps
@@ -142,7 +143,7 @@ object HostedCommitments {
 case class HostedCommitments(localNodeId: PublicKey, remoteNodeId: PublicKey, channelId: ByteVector32,
                              localSpec: CommitmentSpec, originChannels: Map[Long, Origin], lastCrossSignedState: LastCrossSignedState,
                              nextLocalUpdates: List[UpdateMessage with HasChannelId], nextRemoteUpdates: List[UpdateMessage with HasChannelId],
-                             announceChannel: Boolean) extends AbstractCommitments {
+                             announceChannel: Boolean) extends Commitments {
 
   val nextTotalLocal: Long = lastCrossSignedState.localUpdates + nextLocalUpdates.size
 
@@ -264,7 +265,7 @@ case class HostedCommitments(localNodeId: PublicKey, remoteNodeId: PublicKey, ch
     val outgoingHtlcs = commits1.nextLocalSpec.htlcs.collect(DirectedHtlc.outgoing)
 
     if (commits1.nextLocalSpec.toLocal < 0.msat) {
-      return Left(InsufficientFunds(channelId, amount = cmd.amount, missing = -commits1.nextLocalSpec.toLocal.truncateToSatoshi, reserve = 0.sat, fees = 0.sat))
+      return Left(InsufficientFunds(channelId, amount = cmd.amount, missing = -commits1.nextLocalSpec.toLocal.truncateToSatoshi, reserve = Satoshi(0), fees = Satoshi(0)))
     }
 
     // NB: we need the `toSeq` because otherwise duplicate amountMsat would be removed (since incomingHtlcs is a Set).
@@ -293,7 +294,7 @@ case class HostedCommitments(localNodeId: PublicKey, remoteNodeId: PublicKey, ch
     val incomingHtlcs = commits1.nextLocalSpec.htlcs.collect(DirectedHtlc.incoming)
 
     if (commits1.nextLocalSpec.toRemote < 0.msat) {
-      return Left(InsufficientFunds(channelId, amount = add.amountMsat, missing = -commits1.nextLocalSpec.toRemote.truncateToSatoshi, reserve = 0.sat, fees = 0.sat))
+      return Left(InsufficientFunds(channelId, amount = add.amountMsat, missing = -commits1.nextLocalSpec.toRemote.truncateToSatoshi, reserve = Satoshi(0), fees = Satoshi(0)))
     }
 
     // NB: we need the `toSeq` because otherwise duplicate amountMsat would be removed (since incomingHtlcs is a Set).
