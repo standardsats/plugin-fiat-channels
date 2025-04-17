@@ -1,8 +1,8 @@
 package fr.acinq.fc.app
 
 import com.typesafe.config.{ConfigFactory, Config => TypesafeConfig}
-import fr.acinq.bitcoin.Crypto.PublicKey
-import fr.acinq.bitcoin.{ByteVector32, Crypto, LexicographicalOrdering, Protocol}
+import fr.acinq.bitcoin.scalacompat.Crypto
+import fr.acinq.bitcoin.scalacompat.{ByteVector32, LexicographicalOrdering, Protocol}
 import fr.acinq.eclair._
 import fr.acinq.eclair.io.Peer.OutgoingMessage
 import fr.acinq.eclair.io.PeerConnected
@@ -63,7 +63,7 @@ object Tools {
     val tickerBytes = ticker.tag.getBytes(StandardCharsets.UTF_8)
     val hash = Crypto.sha256(hostedNodesCombined(pubkey1, pubkey2) ++ ByteVector(tickerBytes))
     val stream = new ByteArrayInputStream(hash.toArray)
-    def getChunk: Long = Protocol.uint64(stream, ByteOrder.BIG_ENDIAN)
+    def getChunk: Long = Protocol.readUint64(stream, ByteOrder.BIG_ENDIAN)
     ShortChannelId(List.fill(8)(getChunk).sum)
   }
 }

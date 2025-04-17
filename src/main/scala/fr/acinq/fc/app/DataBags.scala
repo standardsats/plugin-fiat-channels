@@ -1,9 +1,9 @@
 package fr.acinq.fc.app
 
-import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey}
-import fr.acinq.bitcoin.{ByteVector32, ByteVector64, Crypto, Protocol, Satoshi}
+import fr.acinq.bitcoin.scalacompat.Crypto.{PrivateKey, PublicKey}
+import fr.acinq.bitcoin.scalacompat.{ByteVector32, ByteVector64, Crypto, Protocol, Satoshi}
 import fr.acinq.eclair._
-import fr.acinq.eclair.payment.PaymentRequest
+import fr.acinq.eclair.payment.Bolt11Invoice
 import fr.acinq.eclair.wire.protocol.{Color, LightningMessageCodecs, UpdateAddHtlc}
 import scodec.bits.ByteVector
 
@@ -127,4 +127,4 @@ case class ReplyCurrentRate(rate: MilliSatoshi) extends HostedChannelMessage
 
 // Propose invoice
 
-case class ProposeInvoice(description: String, invoice: PaymentRequest) extends HostedChannelMessage
+case class ProposeInvoice(description: String, invoice: Bolt11Invoice) extends HostedChannelMessage

@@ -3,11 +3,13 @@ package fr.acinq.fc.app.channel
 import akka.actor.ActorRef
 import akka.event.LoggingAdapter
 import com.softwaremill.quicklens._
-import fr.acinq.bitcoin.Crypto.{PrivateKey, PublicKey}
-import fr.acinq.bitcoin.{ByteVector32, ByteVector64, Crypto, Satoshi, SatoshiLong}
+import fr.acinq.bitcoin.scalacompat.Crypto.{PrivateKey, PublicKey}
+import fr.acinq.bitcoin.scalacompat.{ByteVector32, ByteVector64, Crypto}
+import fr.acinq.bitcoin.scalacompat.Satoshi
+import fr.acinq.eclair.MilliSatoshiConversions._
 import fr.acinq.eclair._
 import fr.acinq.eclair.channel._
-import fr.acinq.eclair.payment.{OutgoingPaymentPacket, PaymentRequest}
+import fr.acinq.eclair.payment.{OutgoingPaymentPacket, Bolt11Invoice}
 import fr.acinq.eclair.transactions.{CommitmentSpec, DirectedHtlc}
 import fr.acinq.eclair.wire.protocol._
 import fr.acinq.fc.app._
@@ -53,7 +55,7 @@ case class HC_CMD_GET_INFO(remoteNodeId: PublicKey, ticker: Ticker) extends HasR
 
 case class HC_CMD_SUSPEND(remoteNodeId: PublicKey, ticker: Ticker) extends HasRemoteNodeIdHostedCommand
 
-case class HC_CMD_PROPOSE_INVOICE(remoteNodeId: PublicKey, ticker: Ticker, description: String, invoice: PaymentRequest) extends HasRemoteNodeIdHostedCommand
+case class HC_CMD_PROPOSE_INVOICE(remoteNodeId: PublicKey, ticker: Ticker, description: String, invoice: Bolt11Invoice) extends HasRemoteNodeIdHostedCommand
 
 sealed trait HCCommandResponse
 

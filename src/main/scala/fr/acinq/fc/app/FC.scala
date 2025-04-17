@@ -7,14 +7,14 @@ import akka.http.scaladsl.server.Route
 import akka.http.scaladsl.unmarshalling.Unmarshaller
 import akka.pattern.ask
 import akka.util.Timeout
-import fr.acinq.bitcoin.{ByteVector32, Satoshi, Script}
-import fr.acinq.bitcoin.Crypto.PublicKey
+import fr.acinq.bitcoin.scalacompat.{ByteVector32, Satoshi, Script}
+import fr.acinq.bitcoin.scalacompat.Crypto.PublicKey
 import fr.acinq.eclair._
 import fr.acinq.eclair.api.directives.EclairDirectives
 import fr.acinq.eclair.api.serde.FormParamExtractors._
 import fr.acinq.eclair.blockchain.fee.{FeeratePerByte, FeeratePerKw}
 import fr.acinq.eclair.channel.{OFFLINE, Origin}
-import fr.acinq.eclair.payment.{IncomingPaymentPacket, PaymentRequest}
+import fr.acinq.eclair.payment.{IncomingPaymentPacket, Bolt11Invoice}
 import fr.acinq.eclair.payment.relay.PostRestartHtlcCleaner
 import fr.acinq.eclair.payment.relay.PostRestartHtlcCleaner.IncomingHtlc
 import fr.acinq.eclair.router.Router
@@ -293,7 +293,7 @@ class FC extends Plugin with RouteProvider {
     }
 
     val proposeInvoice: Route = postRequest("fc-invoicepropose") { implicit t =>
-      formFields(nodeIdFormParam, tickerParam, "description".as[String], "invoice".as[PaymentRequest]) { (remoteNodeId, ticker, description, invoice) =>
+      formFields(nodeIdFormParam, tickerParam, "description".as[String], "invoice".as[Bolt11Invoice]) { (remoteNodeId, ticker, description, invoice) =>
         completeCommand(HC_CMD_PROPOSE_INVOICE(remoteNodeId, ticker, description, invoice))
       }
     }

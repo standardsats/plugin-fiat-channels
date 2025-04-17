@@ -1,7 +1,7 @@
 package fr.acinq.fc.app.network
 
 import akka.actor.Actor
-import fr.acinq.bitcoin._
+import fr.acinq.bitcoin.scalacompat._
 import fr.acinq.eclair.Kit
 import fr.acinq.eclair.blockchain._
 import fr.acinq.eclair.blockchain.bitcoind.rpc.BitcoinCoreClient

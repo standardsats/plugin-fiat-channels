@@ -5,7 +5,7 @@ import com.softwaremill.quicklens._
 
 import scala.collection.parallel.CollectionConverters._
 import fr.acinq.fc.app.Tools.{DuplicateHandler, DuplicateShortId}
-import fr.acinq.bitcoin.{ByteVector32, Satoshi}
+import fr.acinq.bitcoin.scalacompat.{ByteVector32, Satoshi}
 
 import scala.util.{Failure, Random}
 import fr.acinq.fc.app.channel.HC_DATA_ESTABLISHED

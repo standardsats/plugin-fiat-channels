@@ -4,8 +4,8 @@ import akka.actor.{Actor, ActorRef, Props, Terminated}
 import akka.pattern.{ask, pipe}
 import com.google.common.collect.HashBiMap
 import com.google.common.net.HostAndPort
-import fr.acinq.bitcoin.ByteVector32
-import fr.acinq.bitcoin.Crypto.PublicKey
+import fr.acinq.bitcoin.scalacompat.ByteVector32
+import fr.acinq.bitcoin.scalacompat.Crypto.PublicKey
 import fr.acinq.eclair
 import fr.acinq.eclair.io._
 import fr.acinq.eclair.router.{Router, SyncProgress}

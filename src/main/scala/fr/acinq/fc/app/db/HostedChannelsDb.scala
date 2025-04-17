@@ -1,7 +1,7 @@
 package fr.acinq.fc.app.db
 
-import fr.acinq.bitcoin.ByteVector32
-import fr.acinq.bitcoin.Crypto.PublicKey
+import fr.acinq.bitcoin.scalacompat.ByteVector32
+import fr.acinq.bitcoin.scalacompat.Crypto.PublicKey
 import fr.acinq.eclair.wire.internal.channel.version3.FiatChannelCodecs.{HC_DATA_ESTABLISHED_Codec_V0, HC_DATA_ESTABLISHED_Codec}
 import fr.acinq.fc.app.{Ticker, Tools}
 import fr.acinq.fc.app.channel.HC_DATA_ESTABLISHED

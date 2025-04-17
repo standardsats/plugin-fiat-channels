@@ -4,8 +4,8 @@ import java.net.InetSocketAddress
 import java.util.UUID
 import akka.actor.ActorSystem
 import akka.testkit.{TestFSMRef, TestKitBase, TestProbe}
-import fr.acinq.bitcoin.Crypto.PublicKey
-import fr.acinq.bitcoin.{ByteVector32, Crypto}
+import fr.acinq.bitcoin.scalacompat.Crypto.PublicKey
+import fr.acinq.bitcoin.scalacompat.{ByteVector32, Crypto}
 import fr.acinq.eclair.TestConstants.Bob
 import fr.acinq.eclair.channel._
 import fr.acinq.eclair.io.{ConnectionInfo, PeerConnected}

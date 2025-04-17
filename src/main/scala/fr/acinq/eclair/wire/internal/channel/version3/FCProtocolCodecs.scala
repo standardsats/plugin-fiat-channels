@@ -1,6 +1,7 @@
 package fr.acinq.eclair.wire.internal.channel.version3
 
-import fr.acinq.eclair.payment.PaymentRequest
+import shapeless.{::, HNil}
+import fr.acinq.eclair.payment.Bolt11Invoice
 import fr.acinq.eclair.wire.protocol.CommonCodecs._
 import fr.acinq.eclair.wire.protocol.LightningMessageCodecs._
 import fr.acinq.eclair.wire.protocol._
@@ -18,9 +19,14 @@ object FCProtocolCodecs {
     tag withContext "tag"
   }.as[Ticker]
 
-  val paymentRequestCodec = {
-    variableSizeBytes(uint16, utf8).narrow(invoice => Attempt.Successful(PaymentRequest.read(invoice)), invoice => PaymentRequest.write(invoice))
-  }.as[PaymentRequest]
+val paymentRequestCodec = {
+  variableSizeBytes(uint16, utf8)
+    .narrow(
+      str => Attempt.fromEither(Bolt11Invoice.fromString(str).left.map(err => Err(err.getMessage))),
+      invoice => invoice.toString
+    )
+}.as[Bolt11Invoice]
+
 
   val invokeHostedChannelCodec = {
     (bytes32 withContext "chainHash") ::

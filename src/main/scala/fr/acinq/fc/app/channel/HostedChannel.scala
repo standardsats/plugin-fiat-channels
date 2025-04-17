@@ -3,8 +3,8 @@ package fr.acinq.fc.app.channel
 import akka.actor.{ActorRef, FSM}
 import akka.pattern.{ask, pipe}
 import com.softwaremill.quicklens._
-import fr.acinq.bitcoin.Crypto.PublicKey
-import fr.acinq.bitcoin.{ByteVector32, ByteVector64, Crypto, SatoshiLong}
+import fr.acinq.bitcoin.scalacompat.Crypto.PublicKey
+import fr.acinq.bitcoin.scalacompat.{ByteVector32, ByteVector64, Crypto, SatoshiLong}
 import fr.acinq.eclair._
 import fr.acinq.eclair.blockchain.CurrentBlockHeight
 import fr.acinq.eclair.blockchain.fee.FeeratePerKw

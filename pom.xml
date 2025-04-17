@@ -10,12 +10,13 @@
     <name>eclair-fc</name>
 
     <properties>
+        <project.build.outputTimestamp>2020-01-01T00:00:00Z</project.build.outputTimestamp>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.source>11</maven.compiler.source>
-        <maven.compiler.target>11</maven.compiler.target>
-        <scala.version>2.13.6</scala.version>
+        <maven.compiler.release>21</maven.compiler.release>
+        <scala.version>2.13.11</scala.version>
         <scala.version.short>2.13</scala.version.short>
-        <eclair.version>0.7.0-patch-disconnect</eclair.version>
+        <eclair.version>0.12.0</eclair.version>
+        <sttp.version>3.8.16</sttp.version>
     </properties>
 
     <build>
@@ -24,10 +25,16 @@
             <plugin>
                 <groupId>net.alchim31.maven</groupId>
                 <artifactId>scala-maven-plugin</artifactId>
-                <version>3.4.2</version>
+                <version>4.8.1</version>
                 <configuration>
                     <args combine.children="append">
+                        <!--arg>-Xlint:deprecation</arg-->
+                        <arg>-feature</arg>
                         <arg>-language:postfixOps</arg>
+                        <arg>-language:implicitConversions</arg>
+                        <!--arg>-Werror</arg-->
+                        <arg>-unchecked</arg>
+                        <arg>-release:${maven.compiler.release}</arg>
                     </args>
                     <jvmArgs>
                         <jvmArg>-Xmx1024m</jvmArg>
@@ -41,6 +48,7 @@
                         <id>scalac</id>
                         <goals>
                             <goal>compile</goal>
+                            <goal>testCompile</goal>
                         </goals>
                     </execution>
                 </executions>
@@ -53,7 +61,7 @@
                     <transformers>
                         <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                             <manifestEntries>
-                                <Main-Class>fr.acinq.fc.app.FC</Main-Class>
+                                <Main-Class>fr.acinq.alarmbot.AlarmbotPlugin</Main-Class>
                             </manifestEntries>
                         </transformer>
                     </transformers>
@@ -71,14 +79,14 @@
             <plugin>
                 <groupId>org.scalatest</groupId>
                 <artifactId>scalatest-maven-plugin</artifactId>
-                <version>2.0.0</version>
+                <version>2.2.0</version>
                 <configuration>
-                    <parallel>false</parallel>
+                    <parallel>true</parallel>
                     <stdout>I</stdout>
                     <systemProperties>
                         <buildDirectory>${project.build.directory}</buildDirectory>
                     </systemProperties>
-                    <argLine>-Xmx1024m -Dfile.encoding=UTF-8</argLine>
+                    <argLine>-Xmx2048m -Dfile.encoding=UTF-8</argLine>
                 </configuration>
                 <executions>
                     <execution>
@@ -120,7 +128,7 @@
         <dependency>
             <groupId>com.iheart</groupId>
             <artifactId>ficus_2.13</artifactId>
-            <version>1.5.1</version>
+            <version>1.5.2</version>
         </dependency>
         <dependency>
             <groupId>com.typesafe.slick</groupId>
