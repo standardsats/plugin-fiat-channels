@@ -1,6 +1,7 @@
 package fr.acinq.fc.app.network
 
 import akka.actor.Actor
+import fr.acinq.bitcoin.psbt.Psbt
 import fr.acinq.bitcoin.scalacompat._
 import fr.acinq.eclair.Kit
 import fr.acinq.eclair.blockchain._
@@ -82,7 +83,7 @@ class PreimageBroadcastCatcher(preimagesDb: PreimagesDb, kit: Kit, vals: Vals) e
         balance <- wallet.onChainBalance
         toSend = (balance.confirmed + balance.unconfirmed) / 2
         ourAddress <- wallet.getReceiveAddress("Preimage broadcast")
-        pubKeyScript = Address.fromString(ourAddress, kit.nodeParams.chainHash.value).publicKeyScript
+        pubKeyScript = addressToPublicKeyScript(kit.nodeParams.chainHash, ourAddress)
         txOutWithSendBack = TxOut(toSend, Script write pubKeyScript) :: preimageTxOuts.toList
         tx = Transaction(version = 2, txIn = Nil, txOut = txOutWithSendBack, lockTime = 0)
         fundedTx <- wallet.fundTransaction(tx, feeRatePerKw, replaceable = false)
