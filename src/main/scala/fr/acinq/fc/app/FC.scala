@@ -7,7 +7,7 @@ import akka.http.scaladsl.server.Route
 import akka.http.scaladsl.unmarshalling.Unmarshaller
 import akka.pattern.ask
 import akka.util.Timeout
-import fr.acinq.bitcoin.scalacompat.{ByteVector32, Satoshi, Script}
+import fr.acinq.bitcoin.scalacompat.{ByteVector32, Satoshi, Script, addressToPublicKeyScript}
 import fr.acinq.bitcoin.scalacompat.Crypto.PublicKey
 import fr.acinq.eclair._
 import fr.acinq.eclair.api.directives.EclairDirectives
@@ -146,12 +146,21 @@ class FC extends Plugin with RouteProvider {
       val allHotHtlcs: Seq[DirectedHtlc] = channelsDb.listHotChannels.flatMap(_.commitments.localSpec.htlcs)
       val features = Features(feature -> FeatureSupport.Optional)
       allHotHtlcs.collect(DirectedHtlc.incoming).flatMap { htlc =>
-        val packetAttempt = IncomingPaymentPacket.decrypt(htlc, nodeParams.privateKey, features)(log)
+        val packetAttempt = IncomingPaymentPacket.decrypt(htlc, nodeParams.privateKey, features)
         packetAttempt match {
           case Right(packet) =>
-            val paymentHash = packet.add.paymentHash
-            val paymentStatus = nodeParams.db.payments.getIncomingPayment(paymentHash)
-            paymentStatus.map(_ => IncomingHtlc(htlc, packet))
+            // We need to pattern match on the specific packet type
+            packet match {
+              case p: IncomingPaymentPacket.FinalPacket =>
+                val paymentHash = p.add.paymentHash
+                nodeParams.db.payments.getIncomingPayment(paymentHash) match {
+                  case Some(_) => Some(IncomingHtlc(htlc, p))
+                  case None => None
+                }
+              case _ =>
+                // Handle other packet types or skip them
+                None
+            }
           case Left(_) =>
             None
         }
@@ -178,7 +187,7 @@ class FC extends Plugin with RouteProvider {
 
     import scala.concurrent.ExecutionContext.Implicits.global
 
-    val hostedStateUnmarshaller = "state".as[ByteVector](binaryDataUnmarshaller)
+    val hostedStateUnmarshaller = "state".as[ByteVector](bytesUnmarshaller)
     val tickerParam: NameUnmarshallerReceptacle[Ticker] =
       "ticker".as[Ticker](Unmarshaller.strict { str: String =>
         Ticker
@@ -199,8 +208,8 @@ class FC extends Plugin with RouteProvider {
     }
 
     val invoke: Route = postRequest("fc-invoke") { implicit t =>
-      formFields("refundAddress", "secret".as[ByteVector](binaryDataUnmarshaller), nodeIdFormParam, tickerParam) { case (refundAddress, secret, remoteNodeId, ticker) =>
-        val refundPubkeyScript = Script.write(fr.acinq.eclair.addressToPublicKeyScript(refundAddress, kit.nodeParams.chainHash))
+      formFields("refundAddress", "secret".as[ByteVector](bytesUnmarshaller), nodeIdFormParam, tickerParam) { case (refundAddress, secret, remoteNodeId, ticker) =>
+        val refundPubkeyScript = Script.write(addressToPublicKeyScript(kit.nodeParams.chainHash, refundAddress))
         completeCommand(HC_CMD_LOCAL_INVOKE(remoteNodeId, ticker, refundPubkeyScript, secret))
       }
     }
