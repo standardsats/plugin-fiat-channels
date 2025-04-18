@@ -1,5 +1,6 @@
 package fr.acinq.fc.app
 
+import slick.jdbc.PostgresProfile
 import com.typesafe.config.{ConfigFactory, Config => TypesafeConfig}
 import fr.acinq.bitcoin.scalacompat.Crypto
 import fr.acinq.bitcoin.scalacompat.{ByteVector32, LexicographicalOrdering, Protocol}
@@ -18,6 +19,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 import java.security.CryptoPrimitive
 
+import scodec.bits.ByteVector
 
 object Tools {
   def none: PartialFunction[Any, Unit] = { case _ => }

@@ -11,6 +11,7 @@ import scodec.bits.{BitVector, ByteVector}
 import scodec.codecs._
 import scodec.{Attempt, Codec, DecodeResult, Err}
 
+import scala.util.{Failure, Success}
 
 object FCProtocolCodecs {
   val tickerCodec = {
@@ -22,11 +23,10 @@ val paymentRequestCodec = {
   variableSizeBytes(uint16, utf8)
     .narrow(
       str => Attempt.fromEither(
-        Bolt11Invoice.fromString(str).left.map(err => Err(err.getMessage))
-        //  invoice match {
-        //  case Success(inv) => ...
-        //  case Failure(ex) => ...
-        //}
+        Bolt11Invoice.fromString(str) match {
+          case Success(invoice) => Right(invoice)
+          case Failure(err) => Left(Err(err.getMessage))
+        }
       ),
       invoice => invoice.toString
     )

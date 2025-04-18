@@ -65,7 +65,7 @@ class PreimageBroadcastCatcher(preimagesDb: PreimagesDb, kit: Kit, vals: Vals) e
     case NewTransaction(tx) => extractPreimages(tx).foreach(dh.execute)
 
     case NewBlock(blockHash) =>
-      wallet.rpcClient.invoke("getblock", blockHash.value, 0).foreach {
+      wallet.rpcClient.invoke("getblock", blockHash, 0).foreach {
         case JString(rawBlock) =>
           Block.read(rawBlock).tx.par.flatMap(extractPreimages).foreach(dh.execute)
           logger.info(s"PLGN FC, PreimageBroadcastCatcher 'getblock' has been processed")

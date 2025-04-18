@@ -12,7 +12,7 @@ import java.nio.ByteOrder
 
 sealed trait HostedChannelMessage
 
-case class InvokeHostedChannel(chainHash: ByteVector32,
+case class InvokeHostedChannel(chainHash: BlockHash,
                                refundScriptPubKey: ByteVector,
                                secret: ByteVector = ByteVector.empty,
                                ticker: Ticker) extends HostedChannelMessage {
@@ -105,13 +105,13 @@ case class MarginChannel(newCapacity: Satoshi, newRate: MilliSatoshi, clientSig:
   lazy val newCapacityMsatU64: UInt64 = UInt64(newCapacity.toMilliSatoshi.toLong)
 }
 
-case class AskBrandingInfo(chainHash: ByteVector32) extends HostedChannelMessage
+case class AskBrandingInfo(chainHash: BlockHash) extends HostedChannelMessage
 
 // PHC
 
-case class QueryPublicHostedChannels(chainHash: ByteVector32) extends HostedChannelMessage
+case class QueryPublicHostedChannels(chainHash: BlockHash) extends HostedChannelMessage
 
-case class ReplyPublicHostedChannelsEnd(chainHash: ByteVector32) extends HostedChannelMessage
+case class ReplyPublicHostedChannelsEnd(chainHash: BlockHash) extends HostedChannelMessage
 
 // Queries
 
