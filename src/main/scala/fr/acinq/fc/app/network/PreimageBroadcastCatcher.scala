@@ -6,7 +6,7 @@ import fr.acinq.eclair.Kit
 import fr.acinq.eclair.blockchain._
 import fr.acinq.eclair.blockchain.bitcoind.rpc.BitcoinCoreClient
 import fr.acinq.eclair.blockchain.bitcoind.rpc.BitcoinCoreClient.FundTransactionOptions
-import fr.acinq.eclair.blockchain.fee.FeeratePerKw
+import fr.acinq.eclair.blockchain.fee.{FeeratePerByte, FeeratePerKw}
 import fr.acinq.eclair.io.UnknownMessageReceived
 import fr.acinq.eclair.wire.internal.channel.version3.FCProtocolCodecs
 import fr.acinq.fc.app.Tools.DuplicateHandler
@@ -67,7 +67,7 @@ class PreimageBroadcastCatcher(preimagesDb: PreimagesDb, kit: Kit, vals: Vals) e
     case NewBlock(blockHash) =>
       wallet.rpcClient.invoke("getblock", blockHash, 0).foreach {
         case JString(rawBlock) =>
-          Block.read(rawBlock).tx.par.flatMap(extractPreimages).foreach(dh.execute)
+          Block.fromHex(rawBlock).tx.par.flatMap(extractPreimages).foreach(dh.execute)
           logger.info(s"PLGN FC, PreimageBroadcastCatcher 'getblock' has been processed")
         case otherwise =>
           logger.error(s"PLGN FC, PreimageBroadcastCatcher 'getblock' has returned $otherwise")
@@ -78,17 +78,15 @@ class PreimageBroadcastCatcher(preimagesDb: PreimagesDb, kit: Kit, vals: Vals) e
     case PreimageBroadcastCatcher.SendPreimageBroadcast(feeRatePerKw, preimages) =>
       // Each single output may contain up to 2 preimages prefixed by OP_RETURN, a single tx itself may contain many such outputs
       val preimageTxOuts = preimages.toList.map(_.bytes).map(OP_PUSHDATA.apply).grouped(2).map(OP_RETURN :: _).map(Script.write).map(emptyUtxo)
-      val txOptions = FundTransactionOptions(feeRatePerKw, lockUtxos = true)
-
       for {
         balance <- wallet.onChainBalance
         toSend = (balance.confirmed + balance.unconfirmed) / 2
         ourAddress <- wallet.getReceiveAddress("Preimage broadcast")
-        pubKeyScript = fr.acinq.eclair.addressToPublicKeyScript(ourAddress, kit.nodeParams.chainHash)
+        pubKeyScript = Address.fromString(ourAddress, kit.nodeParams.chainHash.value).publicKeyScript
         txOutWithSendBack = TxOut(toSend, Script write pubKeyScript) :: preimageTxOuts.toList
         tx = Transaction(version = 2, txIn = Nil, txOut = txOutWithSendBack, lockTime = 0)
-        fundedTx <- wallet.fundTransaction(tx, txOptions)
-        signedTx <- wallet.signTransaction(fundedTx.tx)
+        fundedTx <- wallet.fundTransaction(tx, feeRatePerKw, replaceable = false)
+        signedTx <- wallet.signPsbt(new Psbt(fundedTx.tx), fundedTx.tx.txIn.indices, Nil)
         true <- wallet.commit(signedTx.tx)
       } sender ! signedTx.tx.txid
 

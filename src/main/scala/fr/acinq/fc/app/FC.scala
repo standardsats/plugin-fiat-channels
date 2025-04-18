@@ -144,9 +144,18 @@ class FC extends Plugin with RouteProvider {
 
     override def getIncomingHtlcs(nodeParams: NodeParams, log: LoggingAdapter): Seq[IncomingHtlc] = {
       val allHotHtlcs: Seq[DirectedHtlc] = channelsDb.listHotChannels.flatMap(_.commitments.localSpec.htlcs)
-      val decryptEither: UpdateAddHtlc => Either[FailureMessage, IncomingPaymentPacket] = IncomingPaymentPacket.decrypt(_: UpdateAddHtlc, nodeParams.privateKey, feature)(log)
-      val resolvePacket: PartialFunction[Either[FailureMessage, IncomingPaymentPacket], IncomingHtlc] = PostRestartHtlcCleaner.decryptedIncomingHtlcs(nodeParams.db.payments)
-      allHotHtlcs.collect(DirectedHtlc.incoming).map(decryptEither).collect(resolvePacket)
+      val features = Features(feature -> FeatureSupport.Optional)
+      allHotHtlcs.collect(DirectedHtlc.incoming).flatMap { htlc =>
+        val packetAttempt = IncomingPaymentPacket.decrypt(htlc, nodeParams.privateKey, features)(log)
+        packetAttempt match {
+          case Right(packet) =>
+            val paymentHash = packet.add.paymentHash
+            val paymentStatus = nodeParams.db.payments.getIncomingPayment(paymentHash)
+            paymentStatus.map(_ => IncomingHtlc(htlc, packet))
+          case Left(_) =>
+            None
+        }
+      }
     }
 
     private def htlcsOut = for {

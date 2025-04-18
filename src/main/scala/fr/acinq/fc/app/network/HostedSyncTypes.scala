@@ -2,7 +2,7 @@ package fr.acinq.fc.app.network
 
 import fr.acinq.bitcoin.scalacompat.Crypto.PublicKey
 import fr.acinq.eclair.ShortChannelId
-import fr.acinq.eclair.router.Graph.GraphStructure.DirectedGraph
+import fr.acinq.eclair.router.GraphWithBalanceEstimates
 import fr.acinq.eclair.router.Router.PublicChannel
 import fr.acinq.fc.app.PHCConfig
 
@@ -28,7 +28,7 @@ sealed trait HostedSyncData {
 
 case class WaitForNormalNetworkData(phcNetwork: PHCNetwork) extends HostedSyncData
 
-case class OperationalData(phcNetwork: PHCNetwork, phcGossip: CollectedGossip, syncNodeId: Option[PublicKey], normalChannels: SortedMap[ShortChannelId, PublicChannel], normalGraph: DirectedGraph) extends HostedSyncData {
+case class OperationalData(phcNetwork: PHCNetwork, phcGossip: CollectedGossip, syncNodeId: Option[PublicKey], normalChannels: SortedMap[ShortChannelId, PublicChannel], normalGraph: GraphWithBalanceEstimates) extends HostedSyncData {
 
   def tooFewNormalChans(nodeId1: PublicKey, nodeId2: PublicKey, phcConfig: PHCConfig): Option[PublicKey] = tooFewNormalChans(nodeId1, phcConfig) orElse tooFewNormalChans(nodeId2, phcConfig)
 

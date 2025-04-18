@@ -80,7 +80,7 @@ class HostedSync(kit: Kit, updatesDb: HostedUpdatesDb, phcConfig: PHCConfig) ext
       stay
 
     case Event(routerData: fr.acinq.eclair.router.Router.Data, data: WaitForNormalNetworkData) =>
-      val data1 = OperationalData(data.phcNetwork, CollectedGossip(Map.empty), None, routerData.channels, routerData.graph)
+      val data1 = OperationalData(data.phcNetwork, CollectedGossip(Map.empty), None, routerData.channels, routerData.graphWithBalances)
       log.info("PLGN FC, HostedSync, got normal network data")
       goto(WAIT_FOR_PHC_SYNC) using data1
   }
@@ -139,7 +139,7 @@ class HostedSync(kit: Kit, updatesDb: HostedUpdatesDb, phcConfig: PHCConfig) ext
       stay
 
     case Event(routerData: Router.Data, data: OperationalData) =>
-      val data1 = data.copy(normalChannels = routerData.channels, normalGraph = routerData.graph)
+      val data1 = data.copy(normalChannels = routerData.channels, normalGraph = routerData.graphWithBalances)
       log.info("PLGN FC, HostedSync, updated normal network data from Router")
       stay using data1
 
@@ -154,7 +154,7 @@ class HostedSync(kit: Kit, updatesDb: HostedUpdatesDb, phcConfig: PHCConfig) ext
 
     case Event(SendSyncTo(wrap), data: OperationalData) =>
       if (ipAntiSpam(wrap.remoteIp) > phcConfig.maxSyncSendsPerIpPerMinute) {
-        wrap sendHostedChannelMsg ReplyPublicHostedChannelsEnd(kit.nodeParams.chainHash)
+        wrap sendHostedChannelMsg ReplyPublicHostedChannelsEnd(kit.nodeParams.chainHash.value)
         log.info(s"PLGN FC, SendSyncTo, abuse, peer=${wrap.info.nodeId}")
       } else broadcastSync(data, wrap)
 
@@ -168,7 +168,7 @@ class HostedSync(kit: Kit, updatesDb: HostedUpdatesDb, phcConfig: PHCConfig) ext
       randomPublicPeers(data).headOption.map { publicPeer =>
         val selectedSyncNodeIdOpt = Some(publicPeer.info.nodeId)
         log.info(s"PLGN FC, HostedSync, with peer=${publicPeer.info.nodeId}")
-        publicPeer sendHostedChannelMsg QueryPublicHostedChannels(kit.nodeParams.chainHash)
+        publicPeer sendHostedChannelMsg QueryPublicHostedChannels(kit.nodeParams.chainHash.value)
         goto(DOING_PHC_SYNC) using data.copy(syncNodeId = selectedSyncNodeIdOpt)
       } getOrElse {
         // A frequent ask timer has been scheduled in transition
@@ -250,7 +250,7 @@ class HostedSync(kit: Kit, updatesDb: HostedUpdatesDb, phcConfig: PHCConfig) ext
 
   private def broadcastSync(data: OperationalData, wrap: PeerConnectedWrap): Unit = Future {
     data.phcNetwork.channels.values.flatMap(_.orderedMessages).foreach(wrap.sendUnknownMsg)
-    wrap sendHostedChannelMsg ReplyPublicHostedChannelsEnd(kit.nodeParams.chainHash)
+    wrap sendHostedChannelMsg ReplyPublicHostedChannelsEnd(kit.nodeParams.chainHash.value)
   } onComplete {
     case Failure(err) => log.info(s"PLGN FC, SendSyncTo, fail, peer=${wrap.info.nodeId} error=${err.getMessage}")
     case _ => log.info(s"PLGN FC, SendSyncTo, success, peer=${wrap.info.nodeId}")
@@ -277,11 +277,11 @@ class HostedSync(kit: Kit, updatesDb: HostedUpdatesDb, phcConfig: PHCConfig) ext
         log.info(s"PLGN PHC, gossip update fail: too few normal channels, msg=$update, peer=$fromNodeId")
         false
 
-      case _ if update.htlcMaximumMsat.forall(_ > phcConfig.maxCapacity) =>
+      case _ if update.htlcMaximumMsat > phcConfig.maxCapacity =>
         log.info(s"PLGN PHC, gossip update fail: capacity is above max, msg=$update, peer=$fromNodeId")
         false
 
-      case _ if update.htlcMaximumMsat.forall(_ < phcConfig.minCapacity) =>
+      case _ if update.htlcMaximumMsat < phcConfig.minCapacity =>
         log.info(s"PLGN PHC, gossip update fail: capacity is below min, msg=$update, peer=$fromNodeId")
         false
 

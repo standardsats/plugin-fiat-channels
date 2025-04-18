@@ -1,7 +1,7 @@
 package fr.acinq.fc.app
 
 import fr.acinq.bitcoin.scalacompat.Crypto.{PrivateKey, PublicKey}
-import fr.acinq.bitcoin.scalacompat.{ByteVector32, ByteVector64, Crypto, Protocol, Satoshi}
+import fr.acinq.bitcoin.scalacompat.{BlockHash, ByteVector32, ByteVector64, Crypto, Protocol, Satoshi}
 import fr.acinq.eclair._
 import fr.acinq.eclair.payment.Bolt11Invoice
 import fr.acinq.eclair.wire.protocol.{Color, LightningMessageCodecs, UpdateAddHtlc}
@@ -12,7 +12,7 @@ import java.nio.ByteOrder
 
 sealed trait HostedChannelMessage
 
-case class InvokeHostedChannel(chainHash: BlockHash,
+case class InvokeHostedChannel(chainHash: ByteVector32,
                                refundScriptPubKey: ByteVector,
                                secret: ByteVector = ByteVector.empty,
                                ticker: Ticker) extends HostedChannelMessage {
@@ -105,13 +105,13 @@ case class MarginChannel(newCapacity: Satoshi, newRate: MilliSatoshi, clientSig:
   lazy val newCapacityMsatU64: UInt64 = UInt64(newCapacity.toMilliSatoshi.toLong)
 }
 
-case class AskBrandingInfo(chainHash: BlockHash) extends HostedChannelMessage
+case class AskBrandingInfo(chainHash: ByteVector32) extends HostedChannelMessage
 
 // PHC
 
-case class QueryPublicHostedChannels(chainHash: BlockHash) extends HostedChannelMessage
+case class QueryPublicHostedChannels(chainHash: ByteVector32) extends HostedChannelMessage
 
-case class ReplyPublicHostedChannelsEnd(chainHash: BlockHash) extends HostedChannelMessage
+case class ReplyPublicHostedChannelsEnd(chainHash: ByteVector32) extends HostedChannelMessage
 
 // Queries
 

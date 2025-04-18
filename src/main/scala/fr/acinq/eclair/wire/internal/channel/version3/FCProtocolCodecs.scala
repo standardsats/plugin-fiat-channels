@@ -22,13 +22,13 @@ object FCProtocolCodecs {
 val paymentRequestCodec = {
   variableSizeBytes(uint16, utf8)
     .narrow(
-      str => Attempt.fromEither(
+      (str: String) => Attempt.fromEither(
         Bolt11Invoice.fromString(str) match {
           case Success(invoice) => Right(invoice)
           case Failure(err) => Left(Err(err.getMessage))
         }
       ),
-      invoice => invoice.toString
+      (invoice: Bolt11Invoice) => invoice.toString
     )
 }.as[Bolt11Invoice]
 
