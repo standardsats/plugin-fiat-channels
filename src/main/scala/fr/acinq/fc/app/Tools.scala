@@ -36,14 +36,6 @@ object Tools {
     def insert(data: T): Boolean
   }
 
-  def makePHCAnnouncementSignature(nodeParams: NodeParams, cs: HostedCommitments, shortChannelId: RealShortChannelId, wantsReply: Boolean): AnnouncementSignature = {
-    val witness = Announcements.generateChannelAnnouncementWitness(nodeParams.chainHash, shortChannelId, nodeParams.nodeId, cs.remoteNodeId, nodeParams.nodeId, cs.remoteNodeId, Features.empty)
-    AnnouncementSignature(nodeParams.nodeKeyManager.signChannelAnnouncement(witness), wantsReply)
-  }
-
-  def makePHCAnnouncement(nodeParams: NodeParams, ls: AnnouncementSignature, rs: AnnouncementSignature, shortChannelId: RealShortChannelId, remoteNodeId: Crypto.PublicKey): ChannelAnnouncement =
-    Announcements.makeChannelAnnouncement(nodeParams.chainHash, shortChannelId, nodeParams.nodeId, remoteNodeId, nodeParams.nodeId, remoteNodeId, ls.nodeSignature, rs.nodeSignature, ls.nodeSignature, rs.nodeSignature)
-
   // HC ids derivation
 
   def hostedNodesCombined(pubkey1: ByteVector, pubkey2: ByteVector): ByteVector = {
@@ -128,10 +120,4 @@ case class FCParams(feeBaseMsat: Long, feeProportionalMillionths: Long, cltvDelt
 
 case class Branding(logo: String, color: Color, contactInfo: String, enabled: Boolean)
 
-case class PHCConfig(maxPerNode: Long, minNormalChans: Long, maxSyncSendsPerIpPerMinute: Int, minCapacityMsat: Long, maxCapacityMsat: Long) {
-  val minCapacity: MilliSatoshi = MilliSatoshi(minCapacityMsat)
-
-  val maxCapacity: MilliSatoshi = MilliSatoshi(maxCapacityMsat)
-}
-
-case class Vals(hcParams: FCParams, maxNewChansPerIpPerHour: Int, maxPreimageRequestsPerIpPerMinute: Int, branding: Branding, phcConfig: PHCConfig)
+case class Vals(hcParams: FCParams, maxNewChansPerIpPerHour: Int, maxPreimageRequestsPerIpPerMinute: Int, branding: Branding)

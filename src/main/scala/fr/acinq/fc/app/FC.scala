@@ -25,7 +25,7 @@ import fr.acinq.fc.app.channel._
 import fr.acinq.fc.app.db.{Blocking, HostedChannelsDb, HostedUpdatesDb, PreimagesDb, RatesDb}
 import fr.acinq.fc.app.FC._
 import fr.acinq.fc.app.Ticker.{EUR_TICKER, USD_TICKER}
-import fr.acinq.fc.app.network.{HostedSync, OperationalData, PHC, PreimageBroadcastCatcher}
+import fr.acinq.fc.app.network.{OperationalData, PreimageBroadcastCatcher}
 import fr.acinq.fc.app.rate.{BinanceSourceModified, CentralBankOracle, EcbSource, RateOracle, RateSource}
 import scodec.bits.ByteVector
 
@@ -62,15 +62,6 @@ object FC {
 
   final val HC_ASK_BRANDING_INFO = 55511
 
-  final val PHC_ANNOUNCE_GOSSIP_TAG = 54513
-
-  final val PHC_ANNOUNCE_SYNC_TAG = 54511
-
-  final val PHC_UPDATE_GOSSIP_TAG = 54509
-
-  final val PHC_UPDATE_SYNC_TAG = 54507
-
-
   final val HC_QUERY_RATE_TAG = 52513
 
   final val HC_REPLY_RATE_TAG = 52511
@@ -95,8 +86,6 @@ object FC {
       HC_MARGIN_CHANNEL_TAG, HC_ASK_BRANDING_INFO, HC_QUERY_RATE_TAG, HC_REPLY_RATE_TAG)
 
   val preimageQueryTags: Set[Int] = Set(HC_QUERY_PREIMAGES_TAG, HC_REPLY_PREIMAGES_TAG)
-
-  val announceTags: Set[Int] = Set(PHC_ANNOUNCE_GOSSIP_TAG, PHC_ANNOUNCE_SYNC_TAG, PHC_UPDATE_GOSSIP_TAG, PHC_UPDATE_SYNC_TAG)
 
   val chanIdMessageTags: Set[Int] = Set(HC_UPDATE_ADD_HTLC_TAG, HC_UPDATE_FULFILL_HTLC_TAG, HC_UPDATE_FAIL_HTLC_TAG, HC_UPDATE_FAIL_MALFORMED_HTLC_TAG, HC_ERROR_TAG)
 
@@ -124,13 +113,12 @@ class FC extends Plugin with RouteProvider {
   override def onKit(eclairKit: Kit): Unit = {
     implicit val coreActorSystem: ActorSystem = eclairKit.system
     preimageRef = eclairKit.system actorOf Props(classOf[PreimageBroadcastCatcher], new PreimagesDb(config.db), eclairKit, config.vals)
-    syncRef = eclairKit.system actorOf Props(classOf[HostedSync], eclairKit, new HostedUpdatesDb(config.db), config.vals.phcConfig)
     var sources: Map[Ticker, RateSource] = Map.empty
     sources += USD_TICKER -> (new BinanceSourceModified(x => x, USD_TICKER, "BTCUSDT", implicitly))
     sources += EUR_TICKER -> (new BinanceSourceModified(x => x, EUR_TICKER, "BTCEUR", implicitly))
     rateOracleRef = eclairKit.system actorOf Props(classOf[RateOracle], eclairKit, ratesDb, sources)
     ecbOracleRef = eclairKit.system actorOf Props(classOf[CentralBankOracle], eclairKit, new EcbSource(USD_TICKER, implicitly))
-    workerRef = eclairKit.system actorOf Props(classOf[Worker], eclairKit, syncRef, preimageRef, channelsDb, config)
+    workerRef = eclairKit.system actorOf Props(classOf[Worker], eclairKit, preimageRef, channelsDb, config)
     kit = eclairKit
   }
 
@@ -250,18 +238,6 @@ class FC extends Plugin with RouteProvider {
     val overrideAccept: Route = postRequest("fc-overrideaccept") { implicit t =>
       formFields(nodeIdFormParam, tickerParam) { (remoteNodeId, ticker) =>
         completeCommand(HC_CMD_OVERRIDE_ACCEPT(remoteNodeId, ticker))
-      }
-    }
-
-    val makePublic: Route = postRequest("fc-makepublic") { implicit t =>
-      formFields(nodeIdFormParam, tickerParam) { (remoteNodeId, ticker) =>
-        completeCommand(HC_CMD_PUBLIC(remoteNodeId, ticker))
-      }
-    }
-
-    val makePrivate: Route = postRequest("fc-makeprivate") { implicit t =>
-      formFields(nodeIdFormParam, tickerParam) { (remoteNodeId, ticker) =>
-        completeCommand(HC_CMD_PRIVATE(remoteNodeId, ticker))
       }
     }
 

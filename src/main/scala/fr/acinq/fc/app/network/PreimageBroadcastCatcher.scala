@@ -68,7 +68,7 @@ class PreimageBroadcastCatcher(preimagesDb: PreimagesDb, kit: Kit, vals: Vals) e
     case NewBlock(blockHash) =>
       wallet.rpcClient.invoke("getblock", blockHash, 0).foreach {
         case JString(rawBlock) =>
-          Block.fromHex(rawBlock).tx.par.flatMap(extractPreimages).foreach(dh.execute)
+          fr.acinq.bitcoin.Block.read(rawBlock).tx.par.flatMap(t => extractPreimages(t)).foreach(p => dh.execute(p))
           logger.info(s"PLGN FC, PreimageBroadcastCatcher 'getblock' has been processed")
         case otherwise =>
           logger.error(s"PLGN FC, PreimageBroadcastCatcher 'getblock' has returned $otherwise")
@@ -83,7 +83,7 @@ class PreimageBroadcastCatcher(preimagesDb: PreimagesDb, kit: Kit, vals: Vals) e
         balance <- wallet.onChainBalance
         toSend = (balance.confirmed + balance.unconfirmed) / 2
         ourAddress <- wallet.getReceiveAddress("Preimage broadcast")
-        pubKeyScript = addressToPublicKeyScript(kit.nodeParams.chainHash, ourAddress)
+        Right(pubKeyScript) = addressToPublicKeyScript(kit.nodeParams.chainHash, ourAddress)
         txOutWithSendBack = TxOut(toSend, Script write pubKeyScript) :: preimageTxOuts.toList
         tx = Transaction(version = 2, txIn = Nil, txOut = txOutWithSendBack, lockTime = 0)
         fundedTx <- wallet.fundTransaction(tx, feeRatePerKw, replaceable = false)

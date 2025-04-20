@@ -196,28 +196,4 @@ val paymentRequestCodec = {
     case msg: UpdateFailMalformedHtlc => UnknownMessage(HC_UPDATE_FAIL_MALFORMED_HTLC_TAG, updateFailMalformedHtlcCodec.encode(msg).require.toByteVector)
     case msg => throw new RuntimeException(s"PLGN FC, wrong message=${msg.getClass.getName}")
   }
-
-  // Normal gossip messages which are also used in PHC gossip
-
-  def decodeAnnounceMessage(wrap: UnknownMessage): Attempt[AnnouncementMessage] = {
-    val bitVector = wrap.data.toBitVector
-
-    val decodeAttempt = wrap.tag match {
-      case PHC_ANNOUNCE_GOSSIP_TAG => channelAnnouncementCodec.decode(bitVector)
-      case PHC_ANNOUNCE_SYNC_TAG => channelAnnouncementCodec.decode(bitVector)
-      case PHC_UPDATE_GOSSIP_TAG => channelUpdateCodec.decode(bitVector)
-      case PHC_UPDATE_SYNC_TAG => channelUpdateCodec.decode(bitVector)
-      case tag => Attempt failure Err(s"PLGN FC, wrong tag=$tag")
-    }
-
-    decodeAttempt.map(_.value)
-  }
-
-  def toUnknownAnnounceMessage(message: AnnouncementMessage, isGossip: Boolean): UnknownMessage = message match {
-    case msg: ChannelAnnouncement if isGossip => UnknownMessage(PHC_ANNOUNCE_GOSSIP_TAG, channelAnnouncementCodec.encode(msg).require.toByteVector)
-    case msg: ChannelAnnouncement => UnknownMessage(PHC_ANNOUNCE_SYNC_TAG, channelAnnouncementCodec.encode(msg).require.toByteVector)
-    case msg: ChannelUpdate if isGossip => UnknownMessage(PHC_UPDATE_GOSSIP_TAG, channelUpdateCodec.encode(msg).require.toByteVector)
-    case msg: ChannelUpdate => UnknownMessage(PHC_UPDATE_SYNC_TAG, channelUpdateCodec.encode(msg).require.toByteVector)
-    case msg => throw new RuntimeException(s"PLGN FC, wrong message=${msg.getClass.getName}")
-  }
 }

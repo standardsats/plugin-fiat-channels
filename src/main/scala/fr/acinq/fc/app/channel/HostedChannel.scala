@@ -21,8 +21,7 @@ import fr.acinq.fc.app.Tools.{DuplicateHandler, DuplicateShortId}
 import fr.acinq.fc.app._
 import fr.acinq.fc.app.db.Blocking.{span, timeout}
 import fr.acinq.fc.app.db.HostedChannelsDb
-import fr.acinq.fc.app.network.HostedSync.SyncFromPHCPeers
-import fr.acinq.fc.app.network.{HostedSync, OperationalData, PHC, PreimageBroadcastCatcher}
+import fr.acinq.fc.app.network.{HostedSync, OperationalData, PreimageBroadcastCatcher}
 import fr.acinq.fc.app.rate.{CentralBankOracle, RateOracle}
 import scodec.bits.ByteVector
 
@@ -42,7 +41,6 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
 
   lazy val shortChannelId: RealShortChannelId = Tools.hostedShortChanId(kit.nodeParams.nodeId.value, remoteNodeId.value, ticker)
 
-  startTimerWithFixedDelay("SendAnnouncements", HostedChannel.SendAnnouncements(force = false), PHC.tickAnnounceThreshold)
   startTimerWithFixedDelay("SendRates", QueryCurrentRate, 1.minutes)
 
   context.system.eventStream.subscribe(channel = classOf[PreimageBroadcastCatcher.BroadcastedPreimage], subscriber = self)
@@ -235,62 +233,6 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
 
   when(NORMAL) {
 
-    // PHC announcements
-
-    case Event(_: HostedSync.RouterIsOperational, data: HC_DATA_ESTABLISHED) if data.commitments.announceChannel =>
-      // PHC with remote peer may become NORMAL sooner than our PHC router becomes operational
-      manageUpdates(data)
-      stay
-
-    case Event(HostedChannel.SendAnnouncements(force), data: HC_DATA_ESTABLISHED) if data.commitments.announceChannel =>
-      val update1 = makeChannelUpdate(localLCSS = data.commitments.lastCrossSignedState, enable = true)
-      context.system.eventStream publish makeLocalUpdateEvent(update1, data.commitments)
-      val data1 = data.copy(channelUpdate = update1)
-
-      data1.channelAnnouncement match {
-        case None => stay StoringAndUsing data1 SendingHosted Tools.makePHCAnnouncementSignature(kit.nodeParams, data.commitments, shortChannelId, wantsReply = true)
-        case Some(announce) if force || data.shouldRebroadcastAnnounce => stay StoringAndUsing data1 Announcing announce Announcing update1
-        case _ => stay StoringAndUsing data1 Announcing update1
-      }
-
-    case Event(remoteSig: AnnouncementSignature, data: HC_DATA_ESTABLISHED) if data.commitments.announceChannel =>
-      val localSig = Tools.makePHCAnnouncementSignature(kit.nodeParams, data.commitments, shortChannelId, wantsReply = false)
-      val announce = Tools.makePHCAnnouncement(kit.nodeParams, localSig, remoteSig, shortChannelId, remoteNodeId)
-      val update1 = makeChannelUpdate(localLCSS = data.commitments.lastCrossSignedState, enable = true)
-      val data1 = data.copy(channelAnnouncement = Some(announce), channelUpdate = update1)
-      context.system.eventStream publish makeLocalUpdateEvent(update1, data.commitments)
-      val isSigOK = Announcements.checkSigs(announce)
-
-      if (isSigOK && remoteSig.wantsReply) {
-        log.info(s"PLGN FC, announcing PHC and sending sig reply, peer=$remoteNodeId")
-        stay StoringAndUsing data1 SendingHosted localSig Announcing announce Announcing data1.channelUpdate
-      } else if (isSigOK) {
-        log.info(s"PLGN FC, announcing PHC without sig reply, peer=$remoteNodeId")
-        stay StoringAndUsing data1 Announcing announce Announcing data1.channelUpdate
-      } else {
-        log.info(s"PLGN FC, announce sig check failed, peer=$remoteNodeId")
-        stay
-      }
-
-    case Event(HC_CMD_PUBLIC(remoteNodeId, ticker, false), data: HC_DATA_ESTABLISHED) =>
-      val syncData = Await.result(hostedSync ? HostedSync.GetHostedSyncData, span).asInstanceOf[OperationalData]
-      val notEnoughNormalChannels = syncData.tooFewNormalChans(kit.nodeParams.nodeId, remoteNodeId, cfg.vals.phcConfig)
-      val tooManyPublicHostedChannels = syncData.phcNetwork.tooManyPHCs(kit.nodeParams.nodeId, remoteNodeId, cfg.vals.phcConfig)
-      if (tooManyPublicHostedChannels.isDefined) stay replying CMDResFailure(s"Can't proceed: nodeId=${tooManyPublicHostedChannels.get} has too many PHCs already, max=${cfg.vals.phcConfig.maxPerNode}")
-      else if (notEnoughNormalChannels.isDefined) stay replying CMDResFailure(s"Can't proceed: nodeId=${notEnoughNormalChannels.get} has too few normal channels, min=${cfg.vals.phcConfig.minNormalChans}")
-      else if (cfg.vals.phcConfig.minCapacity > data.commitments.capacity) stay replying CMDResFailure(s"Can't proceed: HC capacity is below min=${cfg.vals.phcConfig.minCapacity}")
-      else if (cfg.vals.phcConfig.maxCapacity < data.commitments.capacity) stay replying CMDResFailure(s"Can't proceed: HC capacity is above max=${cfg.vals.phcConfig.maxCapacity}")
-      else stay Receiving HC_CMD_PUBLIC(remoteNodeId, ticker, force = true)
-
-    case Event(cmd: HC_CMD_PUBLIC, data: HC_DATA_ESTABLISHED) =>
-      val data1 = data.modify(_.commitments.announceChannel).setTo(true).copy(channelAnnouncement = None)
-      stay StoringAndUsing data1 replying CMDResSuccess(cmd) Receiving HostedChannel.SendAnnouncements(force = false)
-
-    case Event(cmd: HC_CMD_PRIVATE, data: HC_DATA_ESTABLISHED) =>
-      // This does not immediately affect PHC graph and other HC nodes will keep this channel for `PHC.staleThreshold` days
-      val data1 = data.modify(_.commitments.announceChannel).setTo(false).copy(channelAnnouncement = None)
-      stay StoringAndUsing data1 replying CMDResSuccess(cmd)
-
     // Payments
 
     case Event(cmd: CMD_ADD_HTLC, data: HC_DATA_ESTABLISHED) =>
@@ -443,7 +385,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
 
     case Event(cmd: CMD_ADD_HTLC, data: HC_DATA_ESTABLISHED) =>
       ackAddFail(cmd, ChannelUnavailable(channelId), data.channelUpdate)
-      log.info(s"PLGN PHC, rejecting htlc in state=$stateName, peer=$remoteNodeId")
+      log.info(s"PLGN FC, rejecting htlc in state=$stateName, peer=$remoteNodeId")
       stay
 
     // Scheduling override
@@ -492,14 +434,13 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
       else if (data.resizeProposal.nonEmpty) stay replying CMDResFailure("Resizing declined: channel is already being resized")
       else if (data.commitments.lastCrossSignedState.isHost) stay replying CMDResFailure("Resizing declined: only client can initiate resizing")
       else if (data.commitments.capacity > msg.newCapacity) stay replying CMDResFailure("Resizing declined: new capacity must be larger than current capacity")
-      else if (cfg.vals.phcConfig.maxCapacity < msg.newCapacity) stay replying CMDResFailure("Resizing declined: new capacity must not exceed max allowed capacity")
       else stay StoringAndUsing data.copy(resizeProposal = Some(msg), marginProposal = None, overrideProposal = None) SendingHosted msg replying CMDResSuccess(cmd) Receiving CMD_SIGN(None)
 
     case Event(cmd: HC_CMD_MARGIN, data: HC_DATA_ESTABLISHED) =>
       RateOracle.getMaxRate(ticker) match {
         case Some(maxRate) =>
           val nextMargin = data.commitments.nextMaxFiatMargin(maxRate)
-          val maxCapacity = cfg.vals.phcConfig.maxCapacity
+          val maxCapacity = cfg.vals.hcParams.channelCapacityMsat
           val maxCapacityInc = MilliSatoshi(HostedCommitments.marginMaxCapacityFactor * maxCapacity.toLong)
           val msg = MarginChannel(cmd.newCapacity, cmd.newRate).sign(kit.nodeParams.privateKey)
           val newBalance = msg.newLocalBalance(data.commitments.lastCrossSignedState)
@@ -758,7 +699,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
       log.info(s"PLGN FC, resize check fail, new capacity is less than current one, peer=$remoteNodeId")
       val (data1, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_INVALID_RESIZE)
       errorState StoringAndUsing data1 SendingHasChannelId error
-    } else if (cfg.vals.phcConfig.maxCapacity < resize.newCapacity) {
+    } else if (cfg.vals.hcParams.channelCapacityMsat < resize.newCapacity) {
       log.info(s"PLGN FC, resize check fail, new capacity is more than max allowed one, peer=$remoteNodeId")
       val (data1, error) = withLocalError(data, ErrorCodes.ERR_HOSTED_INVALID_RESIZE)
       errorState StoringAndUsing data1 SendingHasChannelId error
@@ -778,7 +719,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
         val isSignatureFine = margin.verifyClientSig(remoteNodeId)
         log.info(s"PLGN FC, margin proposal=$margin, max recent oracle rate=$currentRate, peer=$remoteNodeId")
         val nextMargin = data.commitments.nextMaxFiatMargin(currentRate)
-        val maxCapacity = cfg.vals.phcConfig.maxCapacity
+        val maxCapacity = cfg.vals.hcParams.channelCapacityMsat
         val maxCapacityInc = MilliSatoshi(HostedCommitments.marginMaxCapacityFactor * maxCapacity.toLong)
         val newBalance = margin.newRemoteBalance(data.commitments.lastCrossSignedState)
 

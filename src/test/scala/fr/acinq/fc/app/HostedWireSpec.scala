@@ -126,8 +126,6 @@ class HostedWireSpec extends AnyFunSuite {
     val channel_update_1 = Announcements.makeChannelUpdate(Block.RegtestGenesisBlock.hash, a, b.publicKey, RealShortChannelId(42), CltvExpiryDelta(5), 7000000.msat, 50000.msat, 100, 500000000L.msat, enable = true)
     val channel_update_2 = Announcements.makeChannelUpdate(Block.RegtestGenesisBlock.hash, b, a.publicKey, RealShortChannelId(42), CltvExpiryDelta(5), 7000000.msat, 50000.msat, 100, 500000000L.msat, enable = true)
 
-    assert(FCProtocolCodecs.toUnknownAnnounceMessage(channel, isGossip = true).tag == FC.PHC_ANNOUNCE_GOSSIP_TAG)
-    assert(FCProtocolCodecs.toUnknownAnnounceMessage(channel_update_1, isGossip = false).tag == FC.PHC_UPDATE_SYNC_TAG)
     assert(FCProtocolCodecs.decodeAnnounceMessage(FCProtocolCodecs.toUnknownAnnounceMessage(channel, isGossip = true)).require == channel)
     assert(FCProtocolCodecs.decodeAnnounceMessage(FCProtocolCodecs.toUnknownAnnounceMessage(channel_update_2, isGossip = false)).require == channel_update_2)
   }

@@ -106,29 +106,6 @@ trait FCStateTestsHelperMethods extends TestKitBase with FixtureTestSuite with P
     bob2alice.expectNoMessage()
   }
 
-  def announcePHC(setup: SetupFixture): Unit = {
-    import setup._
-    bob ! HC_CMD_PUBLIC(aliceKit.nodeParams.nodeId, USD_TICKER, force = true)
-    alice ! bob2alice.expectMsgType[AnnouncementSignature]
-    channelUpdateListener.expectMsgType[LocalChannelUpdate]
-    alice2bob.expectNoMessage() // Alice does not react since she did not issue a local HC_CMD_PUBLIC command
-    alice ! HC_CMD_PUBLIC(bobKit.nodeParams.nodeId, USD_TICKER, force = true)
-    bob ! alice2bob.expectMsgType[AnnouncementSignature]
-    channelUpdateListener.expectMsgType[LocalChannelUpdate]
-    bobSync.expectMsgType[UnknownMessage]
-    bobSync.expectMsgType[UnknownMessage]
-    alice ! bob2alice.expectMsgType[AnnouncementSignature]
-    channelUpdateListener.expectMsgType[LocalChannelUpdate]
-    channelUpdateListener.expectMsgType[LocalChannelUpdate]
-    aliceSync.expectMsgType[UnknownMessage]
-    aliceSync.expectMsgType[UnknownMessage]
-    channelUpdateListener.expectNoMessage()
-    alice2bob.expectNoMessage()
-    bob2alice.expectNoMessage()
-    aliceSync.expectNoMessage()
-    bobSync.expectNoMessage()
-  }
-
   def makeCmdAdd(amount: MilliSatoshi, destination: PublicKey, currentBlockHeight: BlockHeight, paymentPreimage: ByteVector32 = randomBytes32,
                  upstream: Upstream = Upstream.Local(UUID.randomUUID), replyTo: TestProbe = TestProbe()): (ByteVector32, CMD_ADD_HTLC, TestProbe) = {
     val paymentHash: ByteVector32 = Crypto.sha256(paymentPreimage)

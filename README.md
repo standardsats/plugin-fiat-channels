@@ -51,15 +51,12 @@ JAR file can be found in `<plugin-hosted-channels>/target` folder.
 
 ## API Reference
 
-HC plugin extends base Eclair API with HC-specific methods.  
-HC API is accessed in a same way as base API e.g.  `./eclair-cli.sh hc-phcnodes`.
+FC plugin extends base Eclair API with HC-specific methods.  
 
 method                                                                                                            | description                                                                         
 ------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------
 **hc-findbyremoteid** `--nodeId=<remote nodeId>`                                                                  | Find and display HC Json details with remote `nodeId`, if such a channel exists.
 **hc-invoke** `--nodeId=<Host nodeId> --refundAddress=<Bitcoin address> --secret=<0-64 bytes of data in hex>`     | Invokes a new HC with remote `nodeId`, if accepted your node will be a Client side. Established HC is private by default.
-**hc-makepublic** `--nodeId=<remote nodeId>`                                                                      | Propose to make an HC with remote `nodeId` a public one. Both peers need to call this method for HC to become public.
-**hc-makeprivate** `--nodeId=<remote nodeId>`                                                                     | Make public HC with remote `nodeId` a private one. Please note that other nodes will still keep it in their PHC graphs for about 14 days.
 **hc-resize** `--nodeId=<remote nodeId> --newCapacitySat=<new capacity in SAT>`                                   | Increase an existing HC capacity if HC is resizeable. This command should only be issued from Client side, resize attempt from Host side will result an HC suspending immediately.
 **hc-suspend** `--nodeId=<remote nodeId>`                                                                         | Manually suspend an HC with remote `nodeId`, in-flight payments present in HC at the moment of suspending will eventually become failed or fulfilled normally, but new payments won't be accepted.
 **hc-overridepropose** `--nodeId=<remote nodeId> --newLocalBalanceMsat=<new local balance in MSAT>`               | Propose to reset an HC to a new state after it got suspended, can only be issued by Host. This removes all pending payments in HC and properly resolves them in upstream channels.
@@ -68,7 +65,6 @@ method                                                                          
 **hc-verifyremotestate** `--state=<remote state snapshot binary data in hex>`                                     | Verify that remote HC state snapshot is valid, meaning it is correctly cross-signed by local and remote `nodeId`s.
 **hc-restorefromremotestate** `--state=<remote state snapshot binary data in hex>`                                | Restore a locally missing HC from remote HC state provided by peer given that it is correctly cross-signed by local and remote `nodeId`s.
 **hc-broadcastpreimages** `--preimages=[<32 bytes in hex>, ...] --feerateSatByte=<feerate per byte>`              | `OP_RETURN`-timestamp preimages for pending incoming payments for which we have revealed preimages and yet the other side of channel have not cross-signed a clearing state update within reasonable time.
-**hc-phcnodes**                                                                                                   | List `nodeIds` which are known to this node to support public HCs.
 **hc-hot**                                                                                                        | List all HCs which contain pending payments.
 
 ## Handling of suspended HCs

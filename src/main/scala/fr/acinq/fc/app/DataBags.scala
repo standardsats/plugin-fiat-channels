@@ -107,12 +107,6 @@ case class MarginChannel(newCapacity: Satoshi, newRate: MilliSatoshi, clientSig:
 
 case class AskBrandingInfo(chainHash: ByteVector32) extends HostedChannelMessage
 
-// PHC
-
-case class QueryPublicHostedChannels(chainHash: ByteVector32) extends HostedChannelMessage
-
-case class ReplyPublicHostedChannelsEnd(chainHash: ByteVector32) extends HostedChannelMessage
-
 // Queries
 
 case class QueryPreimages(hashes: List[ByteVector32] = Nil) extends HostedChannelMessage

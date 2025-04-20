@@ -13,7 +13,6 @@ import fr.acinq.eclair.wire.internal.channel.version3.FCProtocolCodecs
 import fr.acinq.fc.app.channel._
 import fr.acinq.fc.app.db.Blocking.timeout
 import fr.acinq.fc.app.db.HostedChannelsDb
-import fr.acinq.fc.app.network.HostedSync
 import fr.acinq.fc.app.Worker._
 import grizzled.slf4j.Logging
 import scodec.Attempt
@@ -40,7 +39,7 @@ object Worker {
   val notFound: CMDResFailure = CMDResFailure("HC with remote node is not found")
 }
 
-class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, channelsDb: HostedChannelsDb, cfg: Config) extends Actor with Logging { me =>
+class Worker(kit: eclair.Kit, preimageCatcher: ActorRef, channelsDb: HostedChannelsDb, cfg: Config) extends Actor with Logging { me =>
   context.system.scheduler.scheduleWithFixedDelay(60.minutes, 60.minutes, self, Worker.TickClearIpAntiSpam)
   context.system.scheduler.scheduleWithFixedDelay(5.seconds, 5.seconds, self, Worker.TickReconnectHosts)
   context.system.scheduler.scheduleWithFixedDelay(12.hours, 12.hours, self, TickRemoveIdleChannels)
@@ -62,13 +61,13 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, c
 
     val hotNodeIds = hotChannels.map(_.commitments.remoteNodeId).mkString(", ")
     val clientNodeIds = clientChannels.map(_.commitments.remoteNodeId).mkString(", ")
-    logger.info(s"PLGN PHC, in-memory NodeIds, hot=$hotNodeIds, client=$clientNodeIds")
+    logger.info(s"PLGN FC, in-memory NodeIds, hot=$hotNodeIds, client=$clientNodeIds")
 
     clientChannelRemoteNodeIds ++= clientChannels.map(_.commitments.remoteNodeId)
     (clientChannels ++ hotChannels).distinctBy(c => (c.commitments.remoteNodeId, c.commitments.lastCrossSignedState.initHostedChannel.ticker)).foreach(spawnPreparedChannel)
 
     val nodeIdCheck = clientChannels.forall(_.commitments.localNodeId == kit.nodeParams.nodeId)
-    logger.info(s"PLGN PHC, all HCs have the same NodeId which matches current NodeId=$nodeIdCheck")
+    logger.info(s"PLGN FC, all HCs have the same NodeId which matches current NodeId=$nodeIdCheck")
     if (!nodeIdCheck) System.exit(0)
   }
 
@@ -87,13 +86,10 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, c
     case Worker.TickClearIpAntiSpam => ipAntiSpam.clear
 
     case peerMsg @ UnknownMessageReceived(_, _, message, _) if FC.preimageQueryTags contains message.tag => preimageCatcher ! peerMsg
-    case peerMsg @ UnknownMessageReceived(_, _, message, _) if FC.announceTags contains message.tag => hostedSync ! peerMsg
 
     case UnknownMessageReceived(_, nodeId, message, _) if FC.hostedMessageTags contains message.tag =>
       Tuple3(FCProtocolCodecs decodeHostedMessage message, FC.remoteNode2Connection get nodeId, inMemoryHostedChannels get nodeId) match {
         case (_: Attempt.Failure, _, _) => logger.info(s"PLGN FC, hosted message decoding failed, messageTag=${message.tag}, peer=$nodeId")
-        case (Attempt.Successful(_: ReplyPublicHostedChannelsEnd), Some(wrap), _) => hostedSync ! HostedSync.GotAllSyncFrom(wrap)
-        case (Attempt.Successful(_: QueryPublicHostedChannels), Some(wrap), _) => hostedSync ! HostedSync.SendSyncTo(wrap)
 
         case (Attempt.Successful(_: AskBrandingInfo), Some(wrap), _) => if (cfg.vals.branding.enabled) wrap sendHostedChannelMsg cfg.brandingMessage
         // Special handling for InvokeHostedChannel: if chan exists neither in memory nor in db, then this is a new chan request and anti-spam rules apply
@@ -188,7 +184,7 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, c
   }
 
   def spawnChannel(nodeId: PublicKey, ticker: Ticker): ActorRef = {
-    val spawnedChannelProps = Props(classOf[HostedChannel], kit, nodeId, ticker, channelsDb, hostedSync, cfg)
+    val spawnedChannelProps = Props(classOf[HostedChannel], kit, nodeId, ticker, channelsDb, cfg)
     val channelRef = context watch context.actorOf(spawnedChannelProps)
     inMemoryHostedChannels.put(nodeId, (ticker, channelRef))
     channelRef

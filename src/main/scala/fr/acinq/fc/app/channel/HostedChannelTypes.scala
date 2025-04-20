@@ -13,7 +13,6 @@ import fr.acinq.eclair.payment.{OutgoingPaymentPacket, Bolt11Invoice}
 import fr.acinq.eclair.transactions.{CommitmentSpec, DirectedHtlc}
 import fr.acinq.eclair.wire.protocol._
 import fr.acinq.fc.app._
-import fr.acinq.fc.app.network.PHC
 import scodec.bits.ByteVector
 import fr.acinq.eclair.channel.Commitments
 
@@ -28,21 +27,12 @@ case class RemoteHostedStateResult(state: HostedState, remoteNodeId: Option[Publ
 case class HostedState(nodeId1: PublicKey, nodeId2: PublicKey, lastCrossSignedState: LastCrossSignedState)
 
 // Commands
-
-sealed trait HasRemoteNodeIdHostedCommand {
-  def remoteNodeId: PublicKey
-  def ticker: Ticker
-}
-
 case class HC_CMD_LOCAL_INVOKE(remoteNodeId: PublicKey, ticker: Ticker, refundScriptPubKey: ByteVector, secret: ByteVector) extends HasRemoteNodeIdHostedCommand
 
 case class HC_CMD_EXTERNAL_FULFILL(remoteNodeId: PublicKey, ticker: Ticker, htlcId: Long, paymentPreimage: ByteVector32) extends HasRemoteNodeIdHostedCommand
 
 case class HC_CMD_OVERRIDE_PROPOSE(remoteNodeId: PublicKey, ticker: Ticker, newLocalBalance: MilliSatoshi) extends HasRemoteNodeIdHostedCommand
 case class HC_CMD_OVERRIDE_ACCEPT(remoteNodeId: PublicKey, ticker: Ticker) extends HasRemoteNodeIdHostedCommand
-
-case class HC_CMD_PUBLIC(remoteNodeId: PublicKey, ticker: Ticker, force: Boolean = false) extends HasRemoteNodeIdHostedCommand
-case class HC_CMD_PRIVATE(remoteNodeId: PublicKey, ticker: Ticker) extends HasRemoteNodeIdHostedCommand
 
 case class HC_CMD_RESIZE(remoteNodeId: PublicKey, ticker: Ticker, newCapacity: Satoshi) extends HasRemoteNodeIdHostedCommand
 
@@ -100,10 +90,6 @@ case class HC_DATA_ESTABLISHED(commitments: HostedCommitments,
     // but pending HTLCs can be cleared by our fake FAIL on timeout or by peer's FULFILL
     commitments.nextLocalSpec.htlcs
   }
-
-  def shouldRebroadcastAnnounce: Boolean = channelUpdate.timestamp.toLong < System.currentTimeMillis.millis.toSeconds - PHC.reAnnounceThreshold
-
-  def shouldBroadcastUpdateRightAway: Boolean = channelUpdate.timestamp.toLong < System.currentTimeMillis.millis.toSeconds - PHC.tickAnnounceThreshold.toSeconds
 
   def isResizeSupported: Boolean = commitments.lastCrossSignedState.initHostedChannel.features.contains(ResizeableFCFeature.mandatory)
 
