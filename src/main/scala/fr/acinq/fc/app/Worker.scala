@@ -52,7 +52,7 @@ class Worker(kit: eclair.Kit, hostedSync: ActorRef, preimageCatcher: ActorRef, c
 
   val inMemoryHostedChannels: HashBiMap[PublicKey, (Ticker, ActorRef)] = HashBiMap.create[PublicKey, (Ticker, ActorRef)]
 
-  val ipAntiSpam: mutable.Map[Array[Byte], Int] = mutable.Map.empty[Array[Byte], Int] withDefaultValue 0
+  val ipAntiSpam: mutable.Map[String, Int] = mutable.Map.empty[String, Int] withDefaultValue 0
 
   var clientChannelRemoteNodeIds: Set[PublicKey] = Set.empty
 

@@ -13,7 +13,7 @@ import fr.acinq.eclair.blockchain.fee.FeeratePerKw
 import fr.acinq.eclair.transactions.CommitmentSpec
 import fr.acinq.fc.app.db.HostedChannelsDb
 import org.scalatest.funsuite.AnyFunSuite
-import fr.acinq.eclair.ShortChannelId
+import fr.acinq.eclair.RealShortChannelId
 import fr.acinq.fc.app.Ticker.USD_TICKER
 
 
@@ -63,11 +63,11 @@ class HostedChannelsDbSpec extends AnyFunSuite {
     HCTestUtils.resetEntireDatabase(HCTestUtils.config.db)
     val cdb = new HostedChannelsDb(HCTestUtils.config.db)
 
-    val data1 = data.copy(channelUpdate = channelUpdate.copy(shortChannelId = ShortChannelId(1L)),
+    val data1 = data.copy(channelUpdate = channelUpdate.copy(shortChannelId = RealShortChannelId(1L)),
       commitments = hdc.copy(remoteNodeId = randomKey.publicKey, channelId = randomBytes32))
-    val data2 = data.copy(channelUpdate = channelUpdate.copy(shortChannelId = ShortChannelId(2L)),
+    val data2 = data.copy(channelUpdate = channelUpdate.copy(shortChannelId = RealShortChannelId(2L)),
       commitments = hdc.copy(remoteNodeId = randomKey.publicKey, channelId = randomBytes32))
-    val data3 = data.copy(channelUpdate = channelUpdate.copy(shortChannelId = ShortChannelId(3L)),
+    val data3 = data.copy(channelUpdate = channelUpdate.copy(shortChannelId = RealShortChannelId(3L)),
       commitments = hdc.copy(remoteNodeId = randomKey.publicKey, channelId = randomBytes32,
       nextLocalUpdates = Nil, nextRemoteUpdates = Nil, localSpec = CommitmentSpec(htlcs = Set.empty, FeeratePerKw(Satoshi(0L)),
           toLocal = MilliSatoshi(Random.nextInt(Int.MaxValue)),
@@ -85,11 +85,11 @@ class HostedChannelsDbSpec extends AnyFunSuite {
     HCTestUtils.resetEntireDatabase(HCTestUtils.config.db)
     val cdb = new HostedChannelsDb(HCTestUtils.config.db)
 
-    val data1 = data.copy(channelUpdate = channelUpdate.copy(shortChannelId = ShortChannelId(1L)),
+    val data1 = data.copy(channelUpdate = channelUpdate.copy(shortChannelId = RealShortChannelId(1L)),
       commitments = hdc.copy(remoteNodeId = randomKey.publicKey, channelId = randomBytes32))
-    val data2 = data.copy(channelUpdate = channelUpdate.copy(shortChannelId = ShortChannelId(2L)),
+    val data2 = data.copy(channelUpdate = channelUpdate.copy(shortChannelId = RealShortChannelId(2L)),
       commitments = hdc.copy(remoteNodeId = randomKey.publicKey, channelId = randomBytes32))
-    val data3 = data.copy(channelUpdate = channelUpdate.copy(shortChannelId = ShortChannelId(3L)),
+    val data3 = data.copy(channelUpdate = channelUpdate.copy(shortChannelId = RealShortChannelId(3L)),
       commitments = hdc.copy(remoteNodeId = randomKey.publicKey, channelId = randomBytes32))
 
     cdb.addNewChannel(data1)
@@ -117,14 +117,14 @@ class HostedChannelsDbSpec extends AnyFunSuite {
 
     {
       // Adding
-      val hdcs = for (n <- 0 to 1000) yield data.copy(channelUpdate = channelUpdate.copy(shortChannelId = ShortChannelId(n)),
+      val hdcs = for (n <- 0 to 1000) yield data.copy(channelUpdate = channelUpdate.copy(shortChannelId = RealShortChannelId(n)),
         commitments = hdc.copy(remoteNodeId = keys(n), channelId = randomBytes32))
       hdcs.par.foreach(cdb.updateOrAddNewChannel)
     }
 
     {
       // Updating
-      val hdcs = for (n <- 0 to 1000) yield data.copy(channelUpdate = channelUpdate.copy(shortChannelId = ShortChannelId(n)),
+      val hdcs = for (n <- 0 to 1000) yield data.copy(channelUpdate = channelUpdate.copy(shortChannelId = RealShortChannelId(n)),
         commitments = hdc.copy(remoteNodeId = keys(n), channelId = randomBytes32))
       hdcs.par.foreach(cdb.updateOrAddNewChannel)
     }

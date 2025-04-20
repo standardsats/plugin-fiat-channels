@@ -41,7 +41,7 @@ val paymentRequestCodec = {
   }.as[InvokeHostedChannel]
 
   val initHostedChannelCodec = {
-    (uint64 withContext "maxHtlcValueInFlightMsat") ::
+    (millisatoshi withContext "maxHtlcValueInFlightMsat") ::
       (millisatoshi withContext "htlcMinimumMsat") ::
       (uint16 withContext "maxAcceptedHtlcs") ::
       (millisatoshi withContext "channelCapacityMsat") ::

@@ -38,7 +38,7 @@ class HostedChannelTypesSpec extends AnyFunSuite {
 
   val localCommitmentSpec: CommitmentSpec = CommitmentSpec(htlcs = Set.empty, FeeratePerKw(Satoshi(0)), lcss1.localBalanceMsat, lcss1.remoteBalanceMsat)
 
-  val channelUpdate: ChannelUpdate = ChannelUpdate(randomBytes64, Block.RegtestGenesisBlock.hash, ShortChannelId(1), TimestampSecond(2), ChannelUpdate.ChannelFlags.DUMMY, CltvExpiryDelta(3), 4.msat, 5.msat, 6, None)
+  val channelUpdate: ChannelUpdate = ChannelUpdate(randomBytes64, Block.RegtestGenesisBlock.hash, RealShortChannelId(1), TimestampSecond(2), ChannelUpdate.ChannelFlags.DUMMY, CltvExpiryDelta(3), 4.msat, 5.msat, 6, None)
 
   test("LCSS has the same sigHash for different order of in-flight HTLCs") {
     val lcssDifferentHtlcOrder = lcss.copy(incomingHtlcs = List(updateAddHtlc1, updateAddHtlc2).sortBy(_.id), outgoingHtlcs = List(updateAddHtlc1, updateAddHtlc2).sortBy(_.id))

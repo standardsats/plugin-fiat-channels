@@ -52,7 +52,7 @@ object HostedWireSpec {
   val cs: CommitmentSpec = CommitmentSpec(htlcs = Set(htlc1, htlc2), FeeratePerKw(Satoshi(0L)), toLocal = MilliSatoshi(Random.nextInt(Int.MaxValue)), toRemote = MilliSatoshi(Random.nextInt(Int.MaxValue)))
 
   val channelUpdate: ChannelUpdate = Announcements.makeChannelUpdate(ByteVector32(ByteVector.fill(32)(1)), randomKey, randomKey.publicKey,
-    ShortChannelId(142553), CltvExpiryDelta(42), MilliSatoshi(15), MilliSatoshi(575), 53, Channel.MAX_FUNDING.toMilliSatoshi)
+    RealShortChannelId(142553), CltvExpiryDelta(42), MilliSatoshi(15), MilliSatoshi(575), 53, Channel.MAX_FUNDING.toMilliSatoshi)
 
   val error: Error = Error(ByteVector32.Zeroes, ByteVector.fromValidHex("0000"))
 
@@ -86,7 +86,7 @@ class HostedWireSpec extends AnyFunSuite {
     assert(data == check)
     val a: Crypto.PrivateKey = randomKey
     val b: Crypto.PrivateKey = randomKey
-    val channel = Announcements.makeChannelAnnouncement(Block.RegtestGenesisBlock.hash, ShortChannelId(42), a.publicKey, b.publicKey, randomKey.publicKey,
+    val channel = Announcements.makeChannelAnnouncement(Block.RegtestGenesisBlock.hash, RealShortChannelId(42), a.publicKey, b.publicKey, randomKey.publicKey,
       randomKey.publicKey, sig, sig, ByteVector64.Zeroes, ByteVector64.Zeroes)
     val data1 = data.copy(channelAnnouncement = Some(channel))
     val binary1 = FiatChannelCodecs.HC_DATA_ESTABLISHED_Codec.encode(data1).require
@@ -122,9 +122,9 @@ class HostedWireSpec extends AnyFunSuite {
     val a: Crypto.PrivateKey = randomKey
     val b: Crypto.PrivateKey = randomKey
 
-    val channel = Announcements.makeChannelAnnouncement(Block.RegtestGenesisBlock.hash, ShortChannelId(42), a.publicKey, b.publicKey, randomKey.publicKey, randomKey.publicKey, sig, sig, ByteVector64.Zeroes, ByteVector64.Zeroes)
-    val channel_update_1 = Announcements.makeChannelUpdate(Block.RegtestGenesisBlock.hash, a, b.publicKey, ShortChannelId(42), CltvExpiryDelta(5), 7000000.msat, 50000.msat, 100, 500000000L.msat, enable = true)
-    val channel_update_2 = Announcements.makeChannelUpdate(Block.RegtestGenesisBlock.hash, b, a.publicKey, ShortChannelId(42), CltvExpiryDelta(5), 7000000.msat, 50000.msat, 100, 500000000L.msat, enable = true)
+    val channel = Announcements.makeChannelAnnouncement(Block.RegtestGenesisBlock.hash, RealShortChannelId(42), a.publicKey, b.publicKey, randomKey.publicKey, randomKey.publicKey, sig, sig, ByteVector64.Zeroes, ByteVector64.Zeroes)
+    val channel_update_1 = Announcements.makeChannelUpdate(Block.RegtestGenesisBlock.hash, a, b.publicKey, RealShortChannelId(42), CltvExpiryDelta(5), 7000000.msat, 50000.msat, 100, 500000000L.msat, enable = true)
+    val channel_update_2 = Announcements.makeChannelUpdate(Block.RegtestGenesisBlock.hash, b, a.publicKey, RealShortChannelId(42), CltvExpiryDelta(5), 7000000.msat, 50000.msat, 100, 500000000L.msat, enable = true)
 
     assert(FCProtocolCodecs.toUnknownAnnounceMessage(channel, isGossip = true).tag == FC.PHC_ANNOUNCE_GOSSIP_TAG)
     assert(FCProtocolCodecs.toUnknownAnnounceMessage(channel_update_1, isGossip = false).tag == FC.PHC_UPDATE_SYNC_TAG)

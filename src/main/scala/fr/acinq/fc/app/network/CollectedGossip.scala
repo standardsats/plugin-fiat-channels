@@ -1,21 +1,21 @@
 package fr.acinq.fc.app.network
 
 import fr.acinq.bitcoin.scalacompat.Crypto.PublicKey
-import fr.acinq.eclair.ShortChannelId
+import fr.acinq.eclair.RealShortChannelId
 import fr.acinq.eclair.wire.protocol.{ChannelAnnouncement, ChannelUpdate}
 
 
 case class AnnouncementSeenFrom(seenFrom: Set[PublicKey], announcement: ChannelAnnouncement) {
-  def tuple: (ShortChannelId, AnnouncementSeenFrom) = (announcement.shortChannelId, this)
+  def tuple: (RealShortChannelId, AnnouncementSeenFrom) = (announcement.shortChannelId, this)
 }
 
 case class UpdateSeenFrom(seenFrom: Set[PublicKey], update: ChannelUpdate) {
-  def tuple: (ShortChannelId, UpdateSeenFrom) = (update.shortChannelId, this)
+  def tuple: (RealShortChannelId, UpdateSeenFrom) = (update.shortChannelId, this)
 }
 
-case class CollectedGossip(announces: Map[ShortChannelId, AnnouncementSeenFrom],
-                           updates1: Map[ShortChannelId, UpdateSeenFrom] = Map.empty,
-                           updates2: Map[ShortChannelId, UpdateSeenFrom] = Map.empty) {
+case class CollectedGossip(announces: Map[RealShortChannelId, AnnouncementSeenFrom],
+                           updates1: Map[RealShortChannelId, UpdateSeenFrom] = Map.empty,
+                           updates2: Map[RealShortChannelId, UpdateSeenFrom] = Map.empty) {
 
   def addAnnounce(announce: ChannelAnnouncement, from: PublicKey): CollectedGossip = announces.get(announce.shortChannelId) match {
     case Some(announceSeenFrom) => copy(announces = announces + AnnouncementSeenFrom(announceSeenFrom.seenFrom + from, announce).tuple)

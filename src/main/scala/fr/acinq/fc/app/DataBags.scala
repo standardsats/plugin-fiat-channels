@@ -19,7 +19,7 @@ case class InvokeHostedChannel(chainHash: ByteVector32,
   val finalSecret: ByteVector = secret.take(128)
 }
 
-case class InitHostedChannel(maxHtlcValueInFlightMsat: UInt64,
+case class InitHostedChannel(maxHtlcValueInFlightMsat: MilliSatoshi,
                              htlcMinimumMsat: MilliSatoshi,
                              maxAcceptedHtlcs: Int,
                              channelCapacityMsat: MilliSatoshi,

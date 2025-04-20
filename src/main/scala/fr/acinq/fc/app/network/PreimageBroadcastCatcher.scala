@@ -50,7 +50,7 @@ class PreimageBroadcastCatcher(preimagesDb: PreimagesDb, kit: Kit, vals: Vals) e
   context.system.eventStream.subscribe(channel = classOf[NewBlock], subscriber = self)
 
   lazy val wallet: BitcoinCoreClient = kit.wallet.asInstanceOf[BitcoinCoreClient]
-  val ipAntiSpam: mutable.Map[Array[Byte], Int] = mutable.Map.empty.withDefaultValue(0)
+  val ipAntiSpam: mutable.Map[String, Int] = mutable.Map.empty.withDefaultValue(0)
   val emptyUtxo: ByteVector => TxOut = TxOut(Satoshi(0L), _: ByteVector)
 
   private val dh =

@@ -45,7 +45,7 @@ trait FCStateTestsHelperMethods extends TestKitBase with FixtureTestSuite with P
     def sendHostedChannelMsg(message: HostedChannelMessage): Unit = info.peer ! message
     def sendRoutingMsg(message: AnnouncementMessage): Unit = info.peer ! message
     def sendUnknownMsg(message: UnknownMessage): Unit = info.peer ! message
-    lazy val remoteIp: Array[Byte] = info.connectionInfo.address.getAddress.getAddress
+    lazy val remoteIp: String = info.connectionInfo.address.toString()
   }
 
   def init(): SetupFixture = {

@@ -36,12 +36,12 @@ object Tools {
     def insert(data: T): Boolean
   }
 
-  def makePHCAnnouncementSignature(nodeParams: NodeParams, cs: HostedCommitments, shortChannelId: ShortChannelId, wantsReply: Boolean): AnnouncementSignature = {
+  def makePHCAnnouncementSignature(nodeParams: NodeParams, cs: HostedCommitments, shortChannelId: RealShortChannelId, wantsReply: Boolean): AnnouncementSignature = {
     val witness = Announcements.generateChannelAnnouncementWitness(nodeParams.chainHash, shortChannelId, nodeParams.nodeId, cs.remoteNodeId, nodeParams.nodeId, cs.remoteNodeId, Features.empty)
     AnnouncementSignature(nodeParams.nodeKeyManager.signChannelAnnouncement(witness), wantsReply)
   }
 
-  def makePHCAnnouncement(nodeParams: NodeParams, ls: AnnouncementSignature, rs: AnnouncementSignature, shortChannelId: ShortChannelId, remoteNodeId: Crypto.PublicKey): ChannelAnnouncement =
+  def makePHCAnnouncement(nodeParams: NodeParams, ls: AnnouncementSignature, rs: AnnouncementSignature, shortChannelId: RealShortChannelId, remoteNodeId: Crypto.PublicKey): ChannelAnnouncement =
     Announcements.makeChannelAnnouncement(nodeParams.chainHash, shortChannelId, nodeParams.nodeId, remoteNodeId, nodeParams.nodeId, remoteNodeId, ls.nodeSignature, rs.nodeSignature, ls.nodeSignature, rs.nodeSignature)
 
   // HC ids derivation
@@ -57,12 +57,12 @@ object Tools {
     Crypto.sha256(nodesCombined ++ ByteVector(tickerBytes))
   }
 
-  def hostedShortChanId(pubkey1: ByteVector, pubkey2: ByteVector, ticker: Ticker): ShortChannelId = {
+  def hostedShortChanId(pubkey1: ByteVector, pubkey2: ByteVector, ticker: Ticker): RealShortChannelId = {
     val tickerBytes = ticker.tag.getBytes(StandardCharsets.UTF_8)
     val hash = Crypto.sha256(hostedNodesCombined(pubkey1, pubkey2) ++ ByteVector(tickerBytes))
     val stream = new ByteArrayInputStream(hash.toArray)
     def getChunk: Long = Protocol.readUint64(stream, ByteOrder.BIG_ENDIAN)
-    ShortChannelId(List.fill(8)(getChunk).sum)
+    RealShortChannelId(List.fill(8)(getChunk).sum)
   }
 }
 
@@ -71,7 +71,7 @@ trait PeerConnectedWrap {
   def sendHostedChannelMsg(message: HostedChannelMessage): Unit
   def sendRoutingMsg(message: AnnouncementMessage): Unit
   def sendUnknownMsg(message: UnknownMessage): Unit
-  def remoteIp: Array[Byte]
+  def remoteIp: String
   def info: PeerConnected
 }
 
@@ -80,7 +80,7 @@ case class PeerConnectedWrapNormal(info: PeerConnected) extends PeerConnectedWra
   def sendHostedChannelMsg(message: HostedChannelMessage): Unit = me sendUnknownMsg FCProtocolCodecs.toUnknownHostedMessage(message)
   def sendRoutingMsg(message: AnnouncementMessage): Unit = me sendUnknownMsg FCProtocolCodecs.toUnknownAnnounceMessage(message, isGossip = true)
   def sendUnknownMsg(message: UnknownMessage): Unit = info.peer ! OutgoingMessage(message, info.connectionInfo.peerConnection)
-  lazy val remoteIp: Array[Byte] = info.connectionInfo.address.getAddress.getAddress
+  lazy val remoteIp: String = info.connectionInfo.address.toString()
 }
 
 
@@ -108,13 +108,22 @@ class Config(datadir: File) {
 case class FCParams(feeBaseMsat: Long, feeProportionalMillionths: Long, cltvDeltaBlocks: Int, channelCapacityMsat: Long, htlcMinimumMsat: Long, maxAcceptedHtlcs: Int, isResizable: Boolean) {
   def lastUpdateDiffers(u: ChannelUpdate): Boolean = u.cltvExpiryDelta.toInt != cltvDeltaBlocks || u.htlcMinimumMsat != htlcMinimum || u.feeBaseMsat != feeBase || u.feeProportionalMillionths != feeProportionalMillionths
 
-  def initMsg(rate: MilliSatoshi, ticker: Ticker): InitHostedChannel = InitHostedChannel(UInt64(channelCapacityMsat), htlcMinimum, maxAcceptedHtlcs, channelCapacityMsat.msat, initialClientBalanceMsat = 0L.msat, initialRate = rate, ticker = ticker, channelFeatures)
+  def initMsg(rate: MilliSatoshi, ticker: Ticker): InitHostedChannel = InitHostedChannel(
+    MilliSatoshi(channelCapacityMsat),
+    htlcMinimum,
+    maxAcceptedHtlcs,
+    MilliSatoshi(channelCapacityMsat),
+    initialClientBalanceMsat = MilliSatoshi(0),
+    initialRate = rate,
+    ticker = ticker,
+    channelFeatures
+  )
 
   lazy val channelFeatures: List[Int] = if (isResizable) List(FCFeature.mandatory, ResizeableFCFeature.mandatory) else List(FCFeature.mandatory)
 
-  lazy val htlcMinimum: MilliSatoshi = htlcMinimumMsat.msat
+  lazy val htlcMinimum: MilliSatoshi = MilliSatoshi(htlcMinimumMsat)
 
-  lazy val feeBase: MilliSatoshi = feeBaseMsat.msat
+  lazy val feeBase: MilliSatoshi = MilliSatoshi(feeBaseMsat)
 }
 
 case class Branding(logo: String, color: Color, contactInfo: String, enabled: Boolean)

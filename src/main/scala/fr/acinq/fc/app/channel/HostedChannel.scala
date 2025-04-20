@@ -40,7 +40,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
 
   lazy val channelId: ByteVector32 = Tools.hostedChanId(kit.nodeParams.nodeId.value, remoteNodeId.value, ticker)
 
-  lazy val shortChannelId: ShortChannelId = Tools.hostedShortChanId(kit.nodeParams.nodeId.value, remoteNodeId.value, ticker)
+  lazy val shortChannelId: RealShortChannelId = Tools.hostedShortChanId(kit.nodeParams.nodeId.value, remoteNodeId.value, ticker)
 
   startTimerWithFixedDelay("SendAnnouncements", HostedChannel.SendAnnouncements(force = false), PHC.tickAnnounceThreshold)
   startTimerWithFixedDelay("SendRates", QueryCurrentRate, 1.minutes)
@@ -71,7 +71,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
       // Client is the one who sends either an Error or InvokeHostedChannel on reconnect
       if (data.localErrors.nonEmpty) goto(CLOSED) SendingHasChannelId data.localErrors.head.error
       else if (data.remoteError.isDefined) goto(CLOSED) SendingHasChannelId Error(channelId, ErrorCodes.ERR_HOSTED_CLOSED_BY_REMOTE_PEER)
-      else goto(SYNCING) SendingHosted InvokeHostedChannel(kit.nodeParams.chainHash.value, data.commitments.lastCrossSignedState.refundScriptPubKey, ByteVector.empty, data.commitments.lastCrossSignedState.initHostedChannel.ticker)
+      else goto(SYNCING) SendingHosted InvokeHostedChannel(kit.nodeParams.chainHash, data.commitments.lastCrossSignedState.refundScriptPubKey, ByteVector.empty, data.commitments.lastCrossSignedState.initHostedChannel.ticker)
 
     case Event(Worker.TickRemoveIdleChannels, HC_NOTHING) => stop(FSM.Normal)
 
@@ -98,11 +98,11 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
 
   when(SYNCING) {
     case Event(cmd @ HC_CMD_LOCAL_INVOKE(_, ticker, scriptPubKey, secret), HC_NOTHING) =>
-      val invokeMsg = InvokeHostedChannel(kit.nodeParams.chainHash.value, scriptPubKey, secret, ticker)
+      val invokeMsg = InvokeHostedChannel(kit.nodeParams.chainHash, scriptPubKey, secret, ticker)
       stay using HC_DATA_CLIENT_WAIT_HOST_INIT(scriptPubKey) SendingHosted invokeMsg replying CMDResSuccess(cmd)
 
     case Event(remoteInvoke: InvokeHostedChannel, HC_NOTHING) =>
-      val isWrongChain = kit.nodeParams.chainHash.value != remoteInvoke.chainHash
+      val isWrongChain = kit.nodeParams.chainHash != remoteInvoke.chainHash
       val isValidFinalScriptPubkey = Helpers.Closing.isValidFinalScriptPubkey(remoteInvoke.refundScriptPubKey, allowAnySegwit = false)
       if (isWrongChain) stop(FSM.Normal) SendingHasChannelId Error(channelId, InvalidChainHash(channelId, kit.nodeParams.chainHash, remoteInvoke.chainHash).getMessage)
       else if (!isValidFinalScriptPubkey) stop(FSM.Normal) SendingHasChannelId Error(channelId, InvalidFinalScript(channelId).getMessage)
@@ -531,8 +531,8 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
           if (d1.commitments.announceChannel) manageUpdates(d1) else connection sendRoutingMsg d1.channelUpdate
           context.system.eventStream publish HostedChannelRestored(self, channelId, connection.info.peer, remoteNodeId)
           context.system.eventStream publish ChannelIdAssigned(self, remoteNodeId, temporaryChannelId = ByteVector32.Zeroes, channelId)
-          context.system.eventStream publish ShortChannelIdAssigned(self, channelId, shortChannelId, previousShortChannelId = None)
-          //context.system.eventStream publish ShortChannelIdAssigned(self, channelId, None, aliases, remoteNodeId)
+          context.system.eventStream publish RealShortChannelIdAssigned(self, channelId, shortChannelId, previousRealShortChannelId = None)
+          //context.system.eventStream publish RealShortChannelIdAssigned(self, channelId, None, aliases, remoteNodeId)
 
           context.system.eventStream publish makeLocalUpdateEvent(d1.channelUpdate, d1.commitments)
 
@@ -641,7 +641,7 @@ class HostedChannel(kit: Kit, remoteNodeId: PublicKey, ticker: Ticker, channelsD
   def makeLocalUpdateEvent(update: ChannelUpdate, commits: HostedCommitments): LocalChannelUpdate = LocalChannelUpdate(self, channelId, shortChannelId, remoteNodeId, None, update, commits)
 
   def makeChannelUpdate(localLCSS: LastCrossSignedState, enable: Boolean): ChannelUpdate =
-    Announcements.makeChannelUpdate(kit.nodeParams.chainHash.value, kit.nodeParams.privateKey, remoteNodeId, shortChannelId, CltvExpiryDelta(cfg.vals.hcParams.cltvDeltaBlocks),
+    Announcements.makeChannelUpdate(kit.nodeParams.chainHash, kit.nodeParams.privateKey, remoteNodeId, shortChannelId, CltvExpiryDelta(cfg.vals.hcParams.cltvDeltaBlocks),
       cfg.vals.hcParams.htlcMinimum, cfg.vals.hcParams.feeBase, cfg.vals.hcParams.feeProportionalMillionths, localLCSS.initHostedChannel.channelCapacityMsat, enable)
 
   def makeOverridingLocallySignedLCSS(commits: HostedCommitments, newLocalBalance: MilliSatoshi, newLocalUpdates: Long, newRemoteUpdates: Long, overrideBlockDay: Long, rate: MilliSatoshi): LastCrossSignedState =
